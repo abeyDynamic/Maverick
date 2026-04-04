@@ -216,11 +216,12 @@ export default function QualifyNew() {
         .from('applicants')
         .insert({
           user_id: user.id,
+          client_name: clientName || null,
           residency_status: residency,
           nationality,
           date_of_birth: dob ? format(dob, 'yyyy-MM-dd') : null,
           employment_type: empType || null,
-        })
+        } as any)
         .select('id')
         .single();
 
