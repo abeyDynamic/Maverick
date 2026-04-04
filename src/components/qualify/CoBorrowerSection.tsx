@@ -89,18 +89,17 @@ export function CoBorrowerSection({ index, data, onChange, onRemove }: Props) {
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Date of Birth</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className={cn("w-full mt-1 justify-start text-left font-normal", !data.date_of_birth && "text-muted-foreground")}>
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {data.date_of_birth ? format(data.date_of_birth, "PPP") : "Pick a date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar mode="single" selected={data.date_of_birth || undefined} onSelect={d => onChange({ ...data, date_of_birth: d || null })}
-                  disabled={d => d > new Date() || d < new Date("1940-01-01")} initialFocus className="p-3 pointer-events-auto" />
-              </PopoverContent>
-            </Popover>
+            <Input
+              type="date"
+              className="mt-1"
+              max={format(new Date(), 'yyyy-MM-dd')}
+              min="1940-01-01"
+              value={data.date_of_birth ? format(data.date_of_birth, 'yyyy-MM-dd') : ''}
+              onChange={e => {
+                const v = e.target.value;
+                onChange({ ...data, date_of_birth: v ? new Date(v + 'T00:00:00') : null });
+              }}
+            />
             {(() => {
               const cbAge = getAgeFromDob(data.date_of_birth);
               if (cbAge === null) return null;
