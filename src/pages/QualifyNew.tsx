@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { ArrowLeft, CalendarIcon, Plus, Save } from 'lucide-react';
@@ -20,8 +21,10 @@ import { IncomeFieldCard, IncomeEntry, createIncomeEntry } from '@/components/qu
 import { LiabilityFieldCard, LiabilityEntry, createLiabilityEntry } from '@/components/qualify/LiabilityFieldCard';
 import { CoBorrowerSection, CoBorrowerData, createCoBorrower } from '@/components/qualify/CoBorrowerSection';
 import {
-  COUNTRIES, INCOME_TYPES, LIABILITY_TYPES,
-  normalizeToMonthly, isLimitType, formatCurrency, calculateMaxTenor
+  COUNTRIES, INCOME_TYPES, LIABILITY_TYPES, TRANSACTION_TYPES, PROPERTY_TYPES,
+  PURPOSES, LOAN_TYPE_PREFERENCES, EMIRATES,
+  normalizeToMonthly, isLimitType, formatCurrency, calculateMaxTenor,
+  getAgeFromDob, getTenorEligibility
 } from '@/lib/mortgage-utils';
 
 export default function QualifyNew() {
@@ -40,7 +43,12 @@ export default function QualifyNew() {
   const [ltv, setLtv] = useState(80);
   const [loanAmount, setLoanAmount] = useState(0);
   const [emirate, setEmirate] = useState('dubai');
-  const [txnType, setTxnType] = useState('purchase');
+  const [isDIFC, setIsDIFC] = useState(false);
+  const [isAlAin, setIsAlAin] = useState(false);
+  const [txnType, setTxnType] = useState('resale');
+  const [propertyType, setPropertyType] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [loanTypePref, setLoanTypePref] = useState('best');
   const [tenorMonths, setTenorMonths] = useState(300);
   const [nominalRate, setNominalRate] = useState(4.5);
   const [stressRate, setStressRate] = useState(7.5);
@@ -56,13 +64,35 @@ export default function QualifyNew() {
   // Section 5 — Co-borrowers
   const [coBorrowers, setCoBorrowers] = useState<CoBorrowerData[]>([]);
 
-  // Derived
+  // Derived — tenor eligibility
+  const mainAge = useMemo(() => getAgeFromDob(dob), [dob]);
+  const mainTenorElig = useMemo(() => mainAge !== null ? getTenorEligibility(mainAge) : null, [mainAge]);
+
+  // Binding tenor across all applicants
+  const { bindingTenor, bindingName } = useMemo(() => {
+    let minSalaried = mainTenorElig?.salaried ?? 300;
+    let minSelfEmployed = mainTenorElig?.selfEmployed ?? 300;
+    let bindName = 'Main Applicant';
+
+    coBorrowers.forEach((cb, i) => {
+      const cbAge = getAgeFromDob(cb.date_of_birth);
+      if (cbAge !== null) {
+        const cbElig = getTenorEligibility(cbAge);
+        if (cbElig.salaried < minSalaried) {
+          minSalaried = cbElig.salaried;
+          bindName = cb.name || `Co-Borrower ${i + 1}`;
+        }
+        if (cbElig.selfEmployed < minSelfEmployed) {
+          minSelfEmployed = cbElig.selfEmployed;
+        }
+      }
+    });
+
+    const binding = empType === 'self_employed' ? minSelfEmployed : minSalaried;
+    return { bindingTenor: Math.min(300, Math.max(0, binding)), bindingName: bindName };
+  }, [mainTenorElig, coBorrowers, empType]);
+
   const maxTenor = useMemo(() => calculateMaxTenor(dob, empType), [dob, empType]);
-  const age = useMemo(() => {
-    if (!dob) return null;
-    const diff = Date.now() - dob.getTime();
-    return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
-  }, [dob]);
 
   const effectiveLoan = useMemo(() => {
     if (propertyValue > 0) return Math.round(propertyValue * ltv / 100);
@@ -127,8 +157,19 @@ export default function QualifyNew() {
     if (propertyValue > 0) setLtv(Math.round((n / propertyValue) * 100));
   }
 
+  function handleEmirateChange(val: string) {
+    setEmirate(val);
+    if (val !== 'dubai') setIsDIFC(false);
+    if (val !== 'abu_dhabi') setIsAlAin(false);
+  }
+
   async function handleSave() {
     if (!user) return;
+    // Validation: only 3 required fields
+    if (!residency) { toast.error('Residency Status is required'); return; }
+    if (!nationality) { toast.error('Nationality is required'); return; }
+    if (!dob) { toast.error('Date of Birth is required'); return; }
+
     setSaving(true);
     try {
       const { data: applicant, error: appErr } = await supabase
@@ -138,7 +179,7 @@ export default function QualifyNew() {
           residency_status: residency,
           nationality,
           date_of_birth: dob ? format(dob, 'yyyy-MM-dd') : null,
-          employment_type: empType,
+          employment_type: empType || null,
         })
         .select('id')
         .single();
@@ -154,7 +195,7 @@ export default function QualifyNew() {
         ltv: ltv || null,
         emirate,
         transaction_type: txnType,
-        preferred_tenor_months: Math.min(tenorMonths, maxTenor),
+        preferred_tenor_months: Math.min(tenorMonths, bindingTenor),
         nominal_rate: nominalRate,
         stress_rate: stressRate,
       });
@@ -223,7 +264,7 @@ export default function QualifyNew() {
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <Label className="text-sm text-muted-foreground">Residency Status</Label>
+                    <Label className="text-sm text-muted-foreground">Residency Status <span className="text-destructive">*</span></Label>
                     <Select value={residency} onValueChange={setResidency}>
                       <SelectTrigger className="mt-1"><SelectValue placeholder="Select" /></SelectTrigger>
                       <SelectContent>
@@ -234,7 +275,7 @@ export default function QualifyNew() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-sm text-muted-foreground">Nationality</Label>
+                    <Label className="text-sm text-muted-foreground">Nationality <span className="text-destructive">*</span></Label>
                     <Select value={nationality} onValueChange={setNationality}>
                       <SelectTrigger className="mt-1"><SelectValue placeholder="Select" /></SelectTrigger>
                       <SelectContent className="max-h-60">
@@ -243,7 +284,7 @@ export default function QualifyNew() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-sm text-muted-foreground">Date of Birth</Label>
+                    <Label className="text-sm text-muted-foreground">Date of Birth <span className="text-destructive">*</span></Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button variant="outline" className={cn("w-full mt-1 justify-start text-left font-normal", !dob && "text-muted-foreground")}>
@@ -256,10 +297,12 @@ export default function QualifyNew() {
                           disabled={d => d > new Date() || d < new Date("1940-01-01")} initialFocus className="p-3 pointer-events-auto" />
                       </PopoverContent>
                     </Popover>
-                    {age !== null && (
-                      <div className="mt-1 flex gap-3 text-xs text-muted-foreground">
-                        <span>Age: <strong className="text-primary">{age}</strong></span>
-                        <span>Max Tenor: <strong className="text-primary">{maxTenor} months</strong></span>
+                    {mainAge !== null && mainTenorElig && (
+                      <div className="mt-1.5 text-xs text-muted-foreground space-y-0.5">
+                        <p>Age: <strong className="text-primary">{mainAge}</strong> | Max tenor: <strong className="text-primary">{mainTenorElig.salaried} months</strong> (salaried) / <strong className="text-primary">{mainTenorElig.selfEmployed} months</strong> (self-employed)</p>
+                        {coBorrowers.length > 0 && (
+                          <p className="text-accent font-medium">Binding tenor: {bindingTenor} months based on {bindingName}</p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -296,30 +339,65 @@ export default function QualifyNew() {
                   </div>
                   <div>
                     <Label className="text-sm text-muted-foreground">Emirate</Label>
-                    <Select value={emirate} onValueChange={setEmirate}>
+                    <Select value={emirate} onValueChange={handleEmirateChange}>
                       <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {['dubai','abu_dhabi','sharjah','ajman','rak'].map(e => (
-                          <SelectItem key={e} value={e}>{e.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</SelectItem>
-                        ))}
+                        {EMIRATES.map(e => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                    {emirate === 'dubai' && (
+                      <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                        <Checkbox checked={isDIFC} onCheckedChange={v => setIsDIFC(!!v)} />
+                        <span className="text-xs text-muted-foreground">Property is in DIFC</span>
+                      </label>
+                    )}
+                    {emirate === 'abu_dhabi' && (
+                      <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                        <Checkbox checked={isAlAin} onCheckedChange={v => setIsAlAin(!!v)} />
+                        <span className="text-xs text-muted-foreground">Property is in Al Ain</span>
+                      </label>
+                    )}
                   </div>
                   <div>
                     <Label className="text-sm text-muted-foreground">Transaction Type</Label>
                     <Select value={txnType} onValueChange={setTxnType}>
                       <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {['purchase','buyout','buyout_equity','equity','handover','off_plan'].map(t => (
-                          <SelectItem key={t} value={t}>{t.replace(/_/g, ' + ').replace(/\b\w/g, l => l.toUpperCase())}</SelectItem>
-                        ))}
+                        {TRANSACTION_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Property Type</Label>
+                    <Select value={propertyType} onValueChange={setPropertyType}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        {PROPERTY_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Purpose</Label>
+                    <Select value={purpose} onValueChange={setPurpose}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        {PURPOSES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Loan Type Preference</Label>
+                    <Select value={loanTypePref} onValueChange={setLoanTypePref}>
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {LOAN_TYPE_PREFERENCES.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
                     <Label className="text-sm text-muted-foreground">Preferred Tenor (months)</Label>
-                    <Input type="number" className="mt-1" value={tenorMonths} onChange={e => setTenorMonths(Number(e.target.value))} max={maxTenor} />
-                    {tenorMonths > maxTenor && <p className="text-xs text-destructive mt-1">Exceeds max tenor of {maxTenor} months</p>}
+                    <Input type="number" className="mt-1" value={tenorMonths} onChange={e => setTenorMonths(Number(e.target.value))} max={bindingTenor} />
+                    {tenorMonths > bindingTenor && <p className="text-xs text-destructive mt-1">Exceeds binding tenor of {bindingTenor} months</p>}
                   </div>
                   <div>
                     <Label className="text-sm text-muted-foreground">Nominal Rate %</Label>
@@ -419,7 +497,7 @@ export default function QualifyNew() {
                 totalLiabilities={totalLiabilities}
                 loanAmount={effectiveLoan}
                 stressRate={stressRate}
-                tenorMonths={Math.min(tenorMonths, maxTenor)}
+                tenorMonths={Math.min(tenorMonths, bindingTenor)}
               />
             </div>
           </div>
@@ -432,7 +510,7 @@ export default function QualifyNew() {
             totalLiabilities={totalLiabilities}
             loanAmount={effectiveLoan}
             stressRate={stressRate}
-            tenorMonths={Math.min(tenorMonths, maxTenor)}
+            tenorMonths={Math.min(tenorMonths, bindingTenor)}
           />
         </div>
       </main>

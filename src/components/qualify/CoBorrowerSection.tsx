@@ -8,7 +8,7 @@ import { ChevronDown, Trash2 } from 'lucide-react';
 import { FieldSelector } from './FieldSelector';
 import { IncomeFieldCard, IncomeEntry, createIncomeEntry } from './IncomeFieldCard';
 import { LiabilityFieldCard, LiabilityEntry, createLiabilityEntry } from './LiabilityFieldCard';
-import { INCOME_TYPES, LIABILITY_TYPES } from '@/lib/mortgage-utils';
+import { INCOME_TYPES, LIABILITY_TYPES, getAgeFromDob, getTenorEligibility } from '@/lib/mortgage-utils';
 import { format } from 'date-fns';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -101,6 +101,16 @@ export function CoBorrowerSection({ index, data, onChange, onRemove }: Props) {
                   disabled={d => d > new Date() || d < new Date("1940-01-01")} initialFocus className="p-3 pointer-events-auto" />
               </PopoverContent>
             </Popover>
+            {(() => {
+              const cbAge = getAgeFromDob(data.date_of_birth);
+              if (cbAge === null) return null;
+              const elig = getTenorEligibility(cbAge);
+              return (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Age: <strong className="text-primary">{cbAge}</strong> | Max tenor: <strong className="text-primary">{elig.salaried}m</strong> (salaried) / <strong className="text-primary">{elig.selfEmployed}m</strong> (self-employed)
+                </p>
+              );
+            })()}
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Residency Status</Label>
