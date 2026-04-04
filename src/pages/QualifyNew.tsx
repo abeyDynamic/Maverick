@@ -92,10 +92,7 @@ export default function QualifyNew() {
 
   const maxTenor = useMemo(() => calculateMaxTenor(dob, empType), [dob, empType]);
 
-  const effectiveLoan = useMemo(() => {
-    if (propertyValue > 0) return Math.round(propertyValue * ltv / 100);
-    return loanAmount;
-  }, [propertyValue, ltv, loanAmount]);
+  // No effectiveLoan memo — loanAmount is the single source of truth, kept in sync by handlers
 
   const totalIncome = useMemo(() => {
     let total = 0;
