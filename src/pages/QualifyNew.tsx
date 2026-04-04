@@ -92,10 +92,7 @@ export default function QualifyNew() {
 
   const maxTenor = useMemo(() => calculateMaxTenor(dob, empType), [dob, empType]);
 
-  const effectiveLoan = useMemo(() => {
-    if (propertyValue > 0) return Math.round(propertyValue * ltv / 100);
-    return loanAmount;
-  }, [propertyValue, ltv, loanAmount]);
+  // No effectiveLoan memo — loanAmount is the single source of truth, kept in sync by handlers
 
   const totalIncome = useMemo(() => {
     let total = 0;
@@ -189,7 +186,7 @@ export default function QualifyNew() {
       await supabase.from('property_details').insert({
         applicant_id: appId,
         property_value: propertyValue || null,
-        loan_amount: effectiveLoan || null,
+        loan_amount: loanAmount || null,
         ltv: ltv || null,
         emirate,
         is_difc: isDIFC,
@@ -337,7 +334,7 @@ export default function QualifyNew() {
                   </div>
                   <div>
                     <Label className="text-sm text-muted-foreground">Loan Amount (AED)</Label>
-                    <Input className="mt-1" value={effectiveLoan ? formatCurrency(effectiveLoan) : ''} onChange={e => handleLoanAmountChange(e.target.value)} />
+                    <Input className="mt-1" value={loanAmount ? formatCurrency(loanAmount) : ''} onChange={e => handleLoanAmountChange(e.target.value)} />
                   </div>
                   <div>
                     <Label className="text-sm text-muted-foreground">Emirate</Label>
@@ -497,7 +494,7 @@ export default function QualifyNew() {
               <DBRWidget
                 totalIncome={totalIncome}
                 totalLiabilities={totalLiabilities}
-                loanAmount={effectiveLoan}
+                loanAmount={loanAmount}
                 stressRate={stressRate}
                 tenorMonths={Math.min(tenorMonths, bindingTenor)}
               />
@@ -510,7 +507,7 @@ export default function QualifyNew() {
           <DBRWidget
             totalIncome={totalIncome}
             totalLiabilities={totalLiabilities}
-            loanAmount={effectiveLoan}
+            loanAmount={loanAmount}
             stressRate={stressRate}
             tenorMonths={Math.min(tenorMonths, bindingTenor)}
           />
