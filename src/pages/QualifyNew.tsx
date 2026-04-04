@@ -334,7 +334,7 @@ export default function QualifyNew() {
                   </div>
                   <div>
                     <Label className="text-sm text-muted-foreground">Loan Amount (AED)</Label>
-                    <Input className="mt-1" value={effectiveLoan ? formatCurrency(effectiveLoan) : ''} onChange={e => handleLoanAmountChange(e.target.value)} />
+                    <Input className="mt-1" value={loanAmount ? formatCurrency(loanAmount) : ''} onChange={e => handleLoanAmountChange(e.target.value)} />
                   </div>
                   <div>
                     <Label className="text-sm text-muted-foreground">Emirate</Label>
