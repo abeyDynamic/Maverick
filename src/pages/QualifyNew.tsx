@@ -579,6 +579,7 @@ export default function QualifyNew() {
               nominalRate={nominalRate}
               tenorMonths={effectiveTenor}
               emirate={emirate}
+              productsByBank={productsByBank}
             />
 
             {/* What-If Chat */}
