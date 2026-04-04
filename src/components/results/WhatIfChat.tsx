@@ -22,7 +22,6 @@ export default function WhatIfChat({ initialAnalysis }: WhatIfChatProps) {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Update the initial system message when analysis changes
   useEffect(() => {
     setMessages(prev => {
       const rest = prev.filter(m => m.id !== 'initial');
@@ -38,30 +37,28 @@ export default function WhatIfChat({ initialAnalysis }: WhatIfChatProps) {
     const text = input.trim();
     if (!text) return;
     const adviserMsg: ChatMessage = { id: Date.now().toString(), role: 'adviser', content: text };
-    const replyMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'system', content: 'AI analysis coming soon.' };
+    const replyMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'system', content: 'AI analysis coming soon — this will be powered by Claude.' };
     setMessages(prev => [...prev, adviserMsg, replyMsg]);
     setInput('');
   };
 
   return (
     <div className="flex flex-col h-full border rounded-lg bg-background overflow-hidden">
-      {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b bg-primary text-primary-foreground">
         <MessageSquare className="h-4 w-4" />
         <span className="font-semibold text-sm">What-If Analysis</span>
       </div>
 
-      {/* Messages */}
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
         <div className="space-y-3">
           {messages.map(msg => (
             <div key={msg.id} className={cn('flex', msg.role === 'adviser' ? 'justify-end' : 'justify-start')}>
               <div
                 className={cn(
-                  'max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-line',
+                  'max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-line',
                   msg.role === 'adviser'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-secondary text-secondary-foreground'
+                    ? 'bg-[#1B2A4A] text-white rounded-br-md'
+                    : 'bg-[#E8E4DC] text-foreground rounded-bl-md'
                 )}
               >
                 {msg.content}
@@ -71,7 +68,6 @@ export default function WhatIfChat({ initialAnalysis }: WhatIfChatProps) {
         </div>
       </ScrollArea>
 
-      {/* Input */}
       <div className="flex items-center gap-2 p-3 border-t">
         <Input
           placeholder="Ask a what-if question…"

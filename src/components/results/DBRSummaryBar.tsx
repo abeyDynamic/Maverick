@@ -15,13 +15,14 @@ export default function DBRSummaryBar({ totalIncome, totalLiabilities, loanAmoun
   const dbr = totalIncome > 0 ? ((stressEMI + totalLiabilities) / totalIncome) * 100 : 0;
 
   const dbrColor = dbr === 0 ? 'text-muted-foreground' : dbr < 42 ? 'text-green-600' : dbr <= 50 ? 'text-amber-600' : 'text-red-600';
+  const barColor = dbr === 0 ? 'bg-muted' : dbr < 42 ? 'bg-green-500' : dbr <= 50 ? 'bg-amber-500' : 'bg-red-500';
 
   return (
     <div className="bg-background rounded-lg border shadow-sm p-4 space-y-3">
       <div className="flex items-center gap-4">
         <div className="flex-shrink-0">
           <p className="text-xs text-muted-foreground font-medium">DBR</p>
-          <p className={cn('text-3xl font-bold', dbrColor)}>{dbr.toFixed(1)}%</p>
+          <p className={cn('text-5xl font-bold tracking-tight', dbrColor)}>{dbr.toFixed(1)}%</p>
         </div>
         <div className="flex-1 grid grid-cols-3 gap-3 text-xs border-l pl-4">
           <div>
@@ -38,6 +39,7 @@ export default function DBRSummaryBar({ totalIncome, totalLiabilities, loanAmoun
           </div>
         </div>
       </div>
+      <div className={cn('h-1.5 w-full rounded-full', barColor)} />
     </div>
   );
 }
