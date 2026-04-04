@@ -8,7 +8,7 @@ import { ChevronDown, Trash2 } from 'lucide-react';
 import { FieldSelector } from './FieldSelector';
 import { IncomeFieldCard, IncomeEntry, createIncomeEntry } from './IncomeFieldCard';
 import { LiabilityFieldCard, LiabilityEntry, createLiabilityEntry } from './LiabilityFieldCard';
-import { INCOME_TYPES, LIABILITY_TYPES } from '@/lib/mortgage-utils';
+import { INCOME_TYPES, LIABILITY_TYPES, getAgeFromDob, getTenorEligibility } from '@/lib/mortgage-utils';
 import { format } from 'date-fns';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
