@@ -285,18 +285,17 @@ export default function QualifyNew() {
                   </div>
                   <div>
                     <Label className="text-sm text-muted-foreground">Date of Birth <span className="text-destructive">*</span></Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className={cn("w-full mt-1 justify-start text-left font-normal", !dob && "text-muted-foreground")}>
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dob ? format(dob, "PPP") : "Pick a date"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={dob || undefined} onSelect={d => setDob(d || null)}
-                          disabled={d => d > new Date() || d < new Date("1940-01-01")} initialFocus className="p-3 pointer-events-auto" />
-                      </PopoverContent>
-                    </Popover>
+                    <Input
+                      type="date"
+                      className="mt-1"
+                      max={format(new Date(), 'yyyy-MM-dd')}
+                      min="1940-01-01"
+                      value={dob ? format(dob, 'yyyy-MM-dd') : ''}
+                      onChange={e => {
+                        const v = e.target.value;
+                        setDob(v ? new Date(v + 'T00:00:00') : null);
+                      }}
+                    />
                     {mainAge !== null && mainTenorElig && (
                       <div className="mt-1.5 text-xs text-muted-foreground space-y-0.5">
                         <p>Age: <strong className="text-primary">{mainAge}</strong> | Max tenor: <strong className="text-primary">{mainTenorElig.salaried} months</strong> (salaried) / <strong className="text-primary">{mainTenorElig.selfEmployed} months</strong> (self-employed)</p>
