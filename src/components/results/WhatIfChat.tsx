@@ -16,17 +16,15 @@ interface WhatIfChatProps {
 }
 
 export default function WhatIfChat({ initialAnalysis }: WhatIfChatProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: 'initial', role: 'system', content: initialAnalysis },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [analysisContent] = useState(() => initialAnalysis);
 
+  // Keep analysis in sync but don't auto-display
+  const latestAnalysis = useRef(initialAnalysis);
   useEffect(() => {
-    setMessages(prev => {
-      const rest = prev.filter(m => m.id !== 'initial');
-      return [{ id: 'initial', role: 'system' as const, content: initialAnalysis }, ...rest];
-    });
+    latestAnalysis.current = initialAnalysis;
   }, [initialAnalysis]);
 
   useEffect(() => {
@@ -37,7 +35,11 @@ export default function WhatIfChat({ initialAnalysis }: WhatIfChatProps) {
     const text = input.trim();
     if (!text) return;
     const adviserMsg: ChatMessage = { id: Date.now().toString(), role: 'adviser', content: text };
-    const replyMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'system', content: 'AI analysis coming soon — this will be powered by Claude.' };
+    const replyMsg: ChatMessage = {
+      id: (Date.now() + 1).toString(),
+      role: 'system',
+      content: 'Claude AI analysis coming soon. For now review the what-if breakdown above.',
+    };
     setMessages(prev => [...prev, adviserMsg, replyMsg]);
     setInput('');
   };
@@ -51,6 +53,11 @@ export default function WhatIfChat({ initialAnalysis }: WhatIfChatProps) {
 
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
         <div className="space-y-3">
+          {messages.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-8">
+              Ask a what-if question to start the analysis…
+            </p>
+          )}
           {messages.map(msg => (
             <div key={msg.id} className={cn('flex', msg.role === 'adviser' ? 'justify-end' : 'justify-start')}>
               <div
