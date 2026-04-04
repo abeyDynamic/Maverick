@@ -38,6 +38,47 @@ export const LIABILITY_TYPES = [
   'Overdraft Limit', 'Credit Line Limit'
 ];
 
+export const TRANSACTION_TYPES = [
+  { value: 'resale', label: 'Resale' },
+  { value: 'handover', label: 'Handover' },
+  { value: 'handover_resale', label: 'Handover Resale' },
+  { value: 'buyout', label: 'Buyout' },
+  { value: 'buyout_equity', label: 'Buyout + Equity Release' },
+  { value: 'equity', label: 'Pure Equity Release' },
+  { value: 'off_plan', label: 'Off-Plan' },
+  { value: 'construction_financing', label: 'Construction Financing' },
+  { value: 'plot_financing', label: 'Plot Financing' },
+  { value: 'building_financing', label: 'Building Financing' },
+  { value: 'lrd_rental', label: 'Lease Rental Discounting (Rental Income Only)' },
+  { value: 'lrd_rental_business', label: 'Lease Rental Discounting (Rental + Business Income)' },
+  { value: 'bb_equity_business', label: 'Business Banking Equity Release (Business Income)' },
+  { value: 'bb_equity_rental', label: 'Business Banking Equity Release (Rental Income)' },
+  { value: 'bb_equity_both', label: 'Business Banking Equity Release (Both)' },
+];
+
+export const PROPERTY_TYPES = [
+  'Apartment', 'Villa', 'Townhouse', 'Office Space', 'Warehouse',
+  'Building (Commercial)', 'Building (Residential)', 'Other'
+];
+
+export const PURPOSES = ['Self Use', 'First Home', 'Second Home', 'Investment'];
+
+export const LOAN_TYPE_PREFERENCES = [
+  { value: 'best', label: 'Best (Any Product)' },
+  { value: 'conventional', label: 'Conventional Only' },
+  { value: 'islamic', label: 'Islamic Only' },
+];
+
+export const EMIRATES = [
+  { value: 'dubai', label: 'Dubai' },
+  { value: 'abu_dhabi', label: 'Abu Dhabi' },
+  { value: 'sharjah', label: 'Sharjah' },
+  { value: 'ajman', label: 'Ajman' },
+  { value: 'umm_al_quwain', label: 'Umm Al Quwain' },
+  { value: 'ras_al_khaimah', label: 'Ras Al Khaimah' },
+  { value: 'fujairah', label: 'Fujairah' },
+];
+
 export function isLimitType(type: string) {
   return type.toLowerCase().includes('limit') || type.toLowerCase().includes('credit card');
 }
@@ -62,13 +103,33 @@ export function formatCurrency(n: number): string {
   return new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 }).format(n);
 }
 
-export function calculateMaxTenor(dob: Date | null, employmentType: string): number {
-  if (!dob) return 300;
-  const capAge = employmentType === 'self_employed' ? 70 : 65;
+export function getAgeFromDob(dob: Date | null): number | null {
+  if (!dob) return null;
   const now = new Date();
-  const ageMs = now.getTime() - dob.getTime();
-  const ageYears = ageMs / (1000 * 60 * 60 * 24 * 365.25);
-  const remainingYears = capAge - ageYears;
-  const remainingMonths = Math.floor(remainingYears * 12) - 3;
-  return Math.min(300, Math.max(0, remainingMonths));
+  let years = now.getFullYear() - dob.getFullYear();
+  let months = now.getMonth() - dob.getMonth();
+  if (months < 0) { years--; months += 12; }
+  if (now.getDate() < dob.getDate()) {
+    months--;
+    if (months < 0) { years--; months += 12; }
+  }
+  return years;
+}
+
+export function getTenorEligibility(currentAge: number) {
+  const maxTenorYears = 25;
+  const yearsTo65 = Math.max(0, 65 - currentAge);
+  const yearsTo70 = Math.max(0, 70 - currentAge);
+  return {
+    salaried: Math.min(yearsTo65 * 12 - 3, maxTenorYears * 12),
+    selfEmployed: Math.min(yearsTo70 * 12 - 3, maxTenorYears * 12),
+  };
+}
+
+export function calculateMaxTenor(dob: Date | null, employmentType: string): number {
+  const age = getAgeFromDob(dob);
+  if (age === null) return 300;
+  const elig = getTenorEligibility(age);
+  const max = employmentType === 'self_employed' ? elig.selfEmployed : elig.salaried;
+  return Math.min(300, Math.max(0, max));
 }
