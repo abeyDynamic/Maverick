@@ -101,6 +101,16 @@ export function CoBorrowerSection({ index, data, onChange, onRemove }: Props) {
                   disabled={d => d > new Date() || d < new Date("1940-01-01")} initialFocus className="p-3 pointer-events-auto" />
               </PopoverContent>
             </Popover>
+            {(() => {
+              const cbAge = getAgeFromDob(data.date_of_birth);
+              if (cbAge === null) return null;
+              const elig = getTenorEligibility(cbAge);
+              return (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Age: <strong className="text-primary">{cbAge}</strong> | Max tenor: <strong className="text-primary">{elig.salaried}m</strong> (salaried) / <strong className="text-primary">{elig.selfEmployed}m</strong> (self-employed)
+                </p>
+              );
+            })()}
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Residency Status</Label>
