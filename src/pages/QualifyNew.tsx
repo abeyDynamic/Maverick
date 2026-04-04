@@ -19,7 +19,7 @@ import { CoBorrowerSection, CoBorrowerData, createCoBorrower } from '@/component
 import DBRSummaryBar from '@/components/results/DBRSummaryBar';
 import BankEligibilityTable, { useBankResults, buildWhatIfAnalysis } from '@/components/results/BankEligibilityTable';
 import WhatIfChat from '@/components/results/WhatIfChat';
-import CostBreakdownSection from '@/components/results/CostBreakdownSection';
+import CostBreakdownSection, { type ProductData } from '@/components/results/CostBreakdownSection';
 import {
   COUNTRIES, INCOME_TYPES, LIABILITY_TYPES, TRANSACTION_TYPES, PROPERTY_TYPES,
   PURPOSES, LOAN_TYPE_PREFERENCES, EMIRATES,
