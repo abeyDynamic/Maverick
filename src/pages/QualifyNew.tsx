@@ -577,6 +577,7 @@ export default function QualifyNew() {
               propertyValue={propertyValue}
               nominalRate={nominalRate}
               tenorMonths={effectiveTenor}
+              emirate={emirate}
             />
 
             {/* What-If Chat */}
