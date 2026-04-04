@@ -298,7 +298,7 @@ export default function QualifyNew() {
                     />
                     {mainAge !== null && mainTenorElig && (
                       <div className="mt-1.5 text-xs text-muted-foreground space-y-0.5">
-                        <p>Age: <strong className="text-primary">{mainAge}</strong> | Max tenor: <strong className="text-primary">{mainTenorElig.salaried} months</strong> (salaried) / <strong className="text-primary">{mainTenorElig.selfEmployed} months</strong> (self-employed)</p>
+                        <p>Age: <strong className="text-primary">{mainAge.years}</strong> years | Max tenor: <strong className="text-primary">{mainTenorElig.salaried} months</strong> (salaried) / <strong className="text-primary">{mainTenorElig.selfEmployed} months</strong> (self-employed)</p>
                         {coBorrowers.length > 0 && (
                           <p className="text-accent font-medium">Binding tenor: {bindingTenor} months based on {bindingName}</p>
                         )}
