@@ -186,7 +186,7 @@ export default function QualifyNew() {
       await supabase.from('property_details').insert({
         applicant_id: appId,
         property_value: propertyValue || null,
-        loan_amount: effectiveLoan || null,
+        loan_amount: loanAmount || null,
         ltv: ltv || null,
         emirate,
         is_difc: isDIFC,
