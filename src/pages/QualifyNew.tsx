@@ -543,6 +543,11 @@ export default function QualifyNew() {
         {/* RIGHT PANEL — Results (60%) */}
         <div className="w-[60%] bg-secondary overflow-y-auto">
           <div className="p-6 space-y-4">
+            {/* Client name display */}
+            {clientName && (
+              <p className="text-sm font-semibold text-primary">{clientName}</p>
+            )}
+
             {/* Pinned DBR Summary */}
             <div className="sticky top-0 z-10">
               <DBRSummaryBar
@@ -563,6 +568,15 @@ export default function QualifyNew() {
               loanAmount={loanAmount}
               tenorMonths={effectiveTenor}
               stressRate={stressRate}
+            />
+
+            {/* Cost Breakdown */}
+            <CostBreakdownSection
+              bankResults={bankResults}
+              loanAmount={loanAmount}
+              propertyValue={propertyValue}
+              nominalRate={nominalRate}
+              tenorMonths={effectiveTenor}
             />
 
             {/* What-If Chat */}
