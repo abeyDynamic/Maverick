@@ -19,7 +19,7 @@ import { CoBorrowerSection, CoBorrowerData, createCoBorrower } from '@/component
 import DBRSummaryBar from '@/components/results/DBRSummaryBar';
 import BankEligibilityTable, { useBankResults, buildWhatIfAnalysis } from '@/components/results/BankEligibilityTable';
 import WhatIfChat from '@/components/results/WhatIfChat';
-import CostBreakdownSection from '@/components/results/CostBreakdownSection';
+import CostBreakdownSection, { type ProductData } from '@/components/results/CostBreakdownSection';
 import {
   COUNTRIES, INCOME_TYPES, LIABILITY_TYPES, TRANSACTION_TYPES, PROPERTY_TYPES,
   PURPOSES, LOAN_TYPE_PREFERENCES, EMIRATES,
@@ -51,9 +51,10 @@ export default function QualifyNew() {
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
 
-  // Banks & notes from Supabase
+  // Banks, notes & products from Supabase
   const [banks, setBanks] = useState<Bank[]>([]);
   const [qualNotes, setQualNotes] = useState<QualNote[]>([]);
+  const [productsByBank, setProductsByBank] = useState<Record<string, ProductData>>({});
 
   useEffect(() => {
     async function loadBanks() {
@@ -90,6 +91,23 @@ export default function QualifyNew() {
   const [tenorMonths, setTenorMonths] = useState(300);
   const [nominalRate, setNominalRate] = useState(4.5);
   const [stressRate, setStressRate] = useState(7.5);
+
+  // Fetch products matching current transaction type
+  useEffect(() => {
+    async function loadProducts() {
+      const { data } = await supabase
+        .from('products')
+        .select('bank_id, rate, fixed_period_months, processing_fee_percent, valuation_fee, life_ins_monthly_percent, prop_ins_annual_percent')
+        .eq('active', true)
+        .eq('transaction_type', txnType) as any;
+      const map: Record<string, ProductData> = {};
+      for (const p of (data ?? [])) {
+        if (!map[p.bank_id]) map[p.bank_id] = p;
+      }
+      setProductsByBank(map);
+    }
+    loadProducts();
+  }, [txnType]);
 
   // Section 3 — Income
   const [selectedIncomeTypes, setSelectedIncomeTypes] = useState<string[]>([]);
@@ -578,6 +596,7 @@ export default function QualifyNew() {
               nominalRate={nominalRate}
               tenorMonths={effectiveTenor}
               emirate={emirate}
+              productsByBank={productsByBank}
             />
 
             {/* What-If Chat */}

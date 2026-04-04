@@ -6,6 +6,16 @@ import { formatCurrency } from '@/lib/mortgage-utils';
 import { cn } from '@/lib/utils';
 import type { BankResult } from './BankEligibilityTable';
 
+export interface ProductData {
+  bank_id: string;
+  rate: number | null;
+  fixed_period_months: number | null;
+  processing_fee_percent: number | null;
+  valuation_fee: number | null;
+  life_ins_monthly_percent: number | null;
+  prop_ins_annual_percent: number | null;
+}
+
 interface Props {
   bankResults: BankResult[];
   loanAmount: number;
@@ -13,20 +23,20 @@ interface Props {
   nominalRate: number;
   tenorMonths: number;
   emirate: string;
+  productsByBank: Record<string, ProductData>;
 }
 
 interface BankCosts {
   bank: BankResult;
-  // Monthly
+  usedRate: number;
+  rateSource: 'product' | 'manual';
   emi: number;
   lifeInsMonth: number;
   propInsMonth: number;
   totalMonthly: number;
-  // Fixed period
   fixedMonths: number;
   fixedPeriodTotal: number;
   rank: number;
-  // Upfront
   downPayment: number;
   dldFee: number;
   mortgageReg: number;
@@ -35,7 +45,6 @@ interface BankCosts {
   processingFeeAED: number;
   valuationFee: number;
   totalUpfront: number;
-  // Grand total
   grandTotal: number;
 }
 
@@ -53,24 +62,31 @@ const RANK_COLORS = [
   'bg-amber-700 text-amber-50',
 ];
 
-export default function CostBreakdownSection({ bankResults, loanAmount, propertyValue, nominalRate, tenorMonths, emirate }: Props) {
+export default function CostBreakdownSection({ bankResults, loanAmount, propertyValue, nominalRate, tenorMonths, emirate, productsByBank }: Props) {
   const approvedBanks = useMemo(() => bankResults.filter(r => r.eligible), [bankResults]);
 
   const costs = useMemo((): BankCosts[] => {
     if (approvedBanks.length === 0 || !loanAmount) return [];
 
     const isDubaiAbuSharjah = ['dubai', 'abu_dhabi', 'sharjah'].includes(emirate);
-    const valFee = isDubaiAbuSharjah ? 2500 : 3000;
+    const defaultValFee = isDubaiAbuSharjah ? 2500 : 3000;
     const isDubai = emirate === 'dubai';
 
     const unsorted = approvedBanks.map(r => {
-      // Defaults (will be replaced by products table data later)
-      const lifeInsRate = 0.00018; // 0.018% per month
-      const propInsRate = 0.00035; // 0.035% per annum
-      const processingFeePercent = 1;
-      const fixedMonths = 24; // default fixed period
+      const product = productsByBank[r.bank.id];
 
-      const emi = Math.round(calcEMI(loanAmount, nominalRate, tenorMonths));
+      // Rate: product rate if available, else manual fallback
+      const usedRate = product?.rate ?? nominalRate;
+      const rateSource: 'product' | 'manual' = product?.rate != null ? 'product' : 'manual';
+
+      // Defaults with product overrides
+      const lifeInsRate = product?.life_ins_monthly_percent != null ? product.life_ins_monthly_percent / 100 : 0.00018;
+      const propInsRate = product?.prop_ins_annual_percent != null ? product.prop_ins_annual_percent / 100 : 0.00035;
+      const processingFeePercent = product?.processing_fee_percent ?? 1;
+      const fixedMonths = product?.fixed_period_months ?? 24;
+      const valFee = product?.valuation_fee ?? defaultValFee;
+
+      const emi = Math.round(calcEMI(loanAmount, usedRate, tenorMonths));
       const lifeInsMonth = Math.round(loanAmount * lifeInsRate);
       const propInsMonth = Math.round((propertyValue * propInsRate) / 12);
       const totalMonthly = emi + lifeInsMonth + propInsMonth;
@@ -84,45 +100,38 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
       const processingFeeAED = Math.round(loanAmount * processingFeePercent / 100);
 
       const totalUpfront = downPayment + dldFee + mortgageReg + transferCentre + processingFeeAED + valFee;
-
-      // Grand total = fixed period cost + all upfront fees EXCLUDING down payment
       const upfrontExclDown = dldFee + mortgageReg + transferCentre + processingFeeAED + valFee;
       const grandTotal = fixedPeriodTotal + upfrontExclDown;
 
       return {
-        bank: r,
-        emi,
-        lifeInsMonth,
-        propInsMonth,
-        totalMonthly,
-        fixedMonths,
-        fixedPeriodTotal,
-        rank: 0,
-        downPayment,
-        dldFee,
-        mortgageReg,
-        transferCentre,
-        processingFeePercent,
-        processingFeeAED,
-        valuationFee: valFee,
-        totalUpfront,
-        grandTotal,
+        bank: r, usedRate, rateSource, emi, lifeInsMonth, propInsMonth, totalMonthly,
+        fixedMonths, fixedPeriodTotal, rank: 0,
+        downPayment, dldFee, mortgageReg, transferCentre,
+        processingFeePercent, processingFeeAED, valuationFee: valFee,
+        totalUpfront, grandTotal,
       };
     });
 
-    // Rank by fixedPeriodTotal ascending
     const sorted = [...unsorted].sort((a, b) => a.fixedPeriodTotal - b.fixedPeriodTotal);
     sorted.forEach((c, i) => { c.rank = i; });
-
     return sorted;
-  }, [approvedBanks, loanAmount, propertyValue, nominalRate, tenorMonths, emirate]);
+  }, [approvedBanks, loanAmount, propertyValue, nominalRate, tenorMonths, emirate, productsByBank]);
 
   if (costs.length === 0) return null;
 
-  type Row = { label: string; getValue: (c: BankCosts) => string; bold?: boolean };
+  type Row = {
+    label: string;
+    getValue: (c: BankCosts) => string;
+    getSubLabel?: (c: BankCosts) => string | null;
+    bold?: boolean;
+  };
 
   const monthlyRows: Row[] = [
-    { label: 'Mortgage EMI', getValue: c => `AED ${formatCurrency(c.emi)}` },
+    {
+      label: 'Monthly EMI',
+      getValue: c => `AED ${formatCurrency(c.emi)}`,
+      getSubLabel: c => `at ${c.usedRate.toFixed(2)}% — ${c.rateSource === 'product' ? 'Rate from product' : 'Rate from manual input'}`,
+    },
     { label: 'Life Insurance', getValue: c => `AED ${formatCurrency(c.lifeInsMonth)}` },
     { label: 'Property Insurance', getValue: c => `AED ${formatCurrency(c.propInsMonth)}` },
     { label: 'Total Monthly Payment', getValue: c => `AED ${formatCurrency(c.totalMonthly)}`, bold: true },
@@ -185,7 +194,12 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
                     </TableCell>
                     {costs.map(c => (
                       <TableCell key={c.bank.bank.id} className={cn('text-xs text-center py-1.5', row.bold && 'font-bold')}>
-                        {row.getValue(c)}
+                        <div>{row.getValue(c)}</div>
+                        {row.getSubLabel && (
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                            {row.getSubLabel(c)}
+                          </div>
+                        )}
                       </TableCell>
                     ))}
                   </TableRow>

@@ -74,6 +74,18 @@ export interface Database {
         Insert: Partial<Database['public']['Tables']['property_details']['Row']>;
         Update: Partial<Database['public']['Tables']['property_details']['Row']>;
       };
+      products: {
+        Row: {
+          id: string; bank_id: string; product_name: string | null; segment: string | null;
+          transaction_type: string | null; rate: number | null; rate_type: string | null;
+          fixed_period_months: number | null; follow_on_margin: number | null;
+          processing_fee_percent: number | null; valuation_fee: number | null;
+          life_ins_monthly_percent: number | null; prop_ins_annual_percent: number | null;
+          early_settlement_fee: string | null; active: boolean;
+        };
+        Insert: Partial<Database['public']['Tables']['products']['Row']> & { bank_id: string };
+        Update: Partial<Database['public']['Tables']['products']['Row']>;
+      };
     };
   };
 }
