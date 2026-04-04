@@ -64,7 +64,7 @@ export default function QualifyNew() {
 
   // Derived — tenor eligibility
   const mainAge = useMemo(() => getAgeFromDob(dob), [dob]);
-  const mainTenorElig = useMemo(() => mainAge !== null ? getTenorEligibility(mainAge) : null, [mainAge]);
+  const mainTenorElig = useMemo(() => mainAge !== null ? getTenorEligibility(mainAge.totalMonths) : null, [mainAge]);
 
   // Binding tenor across all applicants
   const { bindingTenor, bindingName } = useMemo(() => {
