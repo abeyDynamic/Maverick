@@ -10,9 +10,6 @@ import { IncomeFieldCard, IncomeEntry, createIncomeEntry } from './IncomeFieldCa
 import { LiabilityFieldCard, LiabilityEntry, createLiabilityEntry } from './LiabilityFieldCard';
 import { INCOME_TYPES, LIABILITY_TYPES, getAgeFromDob, getTenorEligibility } from '@/lib/mortgage-utils';
 import { format } from 'date-fns';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface CoBorrowerData {
