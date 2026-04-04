@@ -1,0 +1,441 @@
+import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { ArrowLeft, CalendarIcon, Plus, Save } from 'lucide-react';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { DBRWidget } from '@/components/qualify/DBRWidget';
+import { FieldSelector } from '@/components/qualify/FieldSelector';
+import { IncomeFieldCard, IncomeEntry, createIncomeEntry } from '@/components/qualify/IncomeFieldCard';
+import { LiabilityFieldCard, LiabilityEntry, createLiabilityEntry } from '@/components/qualify/LiabilityFieldCard';
+import { CoBorrowerSection, CoBorrowerData, createCoBorrower } from '@/components/qualify/CoBorrowerSection';
+import {
+  COUNTRIES, INCOME_TYPES, LIABILITY_TYPES,
+  normalizeToMonthly, isLimitType, formatCurrency, calculateMaxTenor
+} from '@/lib/mortgage-utils';
+
+export default function QualifyNew() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [saving, setSaving] = useState(false);
+
+  // Section 1 — Personal
+  const [residency, setResidency] = useState('');
+  const [nationality, setNationality] = useState('');
+  const [dob, setDob] = useState<Date | null>(null);
+  const [empType, setEmpType] = useState('');
+
+  // Section 2 — Property
+  const [propertyValue, setPropertyValue] = useState(0);
+  const [ltv, setLtv] = useState(80);
+  const [loanAmount, setLoanAmount] = useState(0);
+  const [emirate, setEmirate] = useState('dubai');
+  const [txnType, setTxnType] = useState('purchase');
+  const [tenorMonths, setTenorMonths] = useState(300);
+  const [nominalRate, setNominalRate] = useState(4.5);
+  const [stressRate, setStressRate] = useState(7.5);
+
+  // Section 3 — Income
+  const [selectedIncomeTypes, setSelectedIncomeTypes] = useState<string[]>([]);
+  const [incomeFields, setIncomeFields] = useState<IncomeEntry[]>([]);
+
+  // Section 4 — Liabilities
+  const [selectedLiabilityTypes, setSelectedLiabilityTypes] = useState<string[]>([]);
+  const [liabilityFields, setLiabilityFields] = useState<LiabilityEntry[]>([]);
+
+  // Section 5 — Co-borrowers
+  const [coBorrowers, setCoBorrowers] = useState<CoBorrowerData[]>([]);
+
+  // Derived
+  const maxTenor = useMemo(() => calculateMaxTenor(dob, empType), [dob, empType]);
+  const age = useMemo(() => {
+    if (!dob) return null;
+    const diff = Date.now() - dob.getTime();
+    return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
+  }, [dob]);
+
+  const effectiveLoan = useMemo(() => {
+    if (propertyValue > 0) return Math.round(propertyValue * ltv / 100);
+    return loanAmount;
+  }, [propertyValue, ltv, loanAmount]);
+
+  const totalIncome = useMemo(() => {
+    let total = 0;
+    for (const f of incomeFields) {
+      total += normalizeToMonthly(f.amount * f.percent_considered / 100, f.recurrence);
+    }
+    for (const cb of coBorrowers) {
+      for (const f of cb.incomeFields) {
+        total += normalizeToMonthly(f.amount * f.percent_considered / 100, f.recurrence);
+      }
+    }
+    return total;
+  }, [incomeFields, coBorrowers]);
+
+  const totalLiabilities = useMemo(() => {
+    let total = 0;
+    const calcLiab = (fields: LiabilityEntry[]) => {
+      for (const f of fields) {
+        if (f.closed_before_application) continue;
+        if (isLimitType(f.liability_type)) total += f.credit_card_limit * 0.05;
+        else total += normalizeToMonthly(f.amount, f.recurrence);
+      }
+    };
+    calcLiab(liabilityFields);
+    for (const cb of coBorrowers) calcLiab(cb.liabilityFields);
+    return total;
+  }, [liabilityFields, coBorrowers]);
+
+  function handleIncomeTypesChange(types: string[]) {
+    setSelectedIncomeTypes(types);
+    const existing = incomeFields.filter(f => types.includes(f.income_type));
+    const newTypes = types.filter(t => !incomeFields.find(f => f.income_type === t));
+    setIncomeFields([...existing, ...newTypes.map(createIncomeEntry)]);
+  }
+
+  function handleLiabilityTypesChange(types: string[]) {
+    setSelectedLiabilityTypes(types);
+    const existing = liabilityFields.filter(f => types.includes(f.liability_type));
+    const newTypes = types.filter(t => !liabilityFields.find(f => f.liability_type === t));
+    setLiabilityFields([...existing, ...newTypes.map(createLiabilityEntry)]);
+  }
+
+  function handlePropertyValueChange(val: string) {
+    const n = Number(val.replace(/,/g, '')) || 0;
+    setPropertyValue(n);
+    setLoanAmount(Math.round(n * ltv / 100));
+  }
+
+  function handleLtvChange(vals: number[]) {
+    setLtv(vals[0]);
+    if (propertyValue > 0) setLoanAmount(Math.round(propertyValue * vals[0] / 100));
+  }
+
+  function handleLoanAmountChange(val: string) {
+    const n = Number(val.replace(/,/g, '')) || 0;
+    setLoanAmount(n);
+    if (propertyValue > 0) setLtv(Math.round((n / propertyValue) * 100));
+  }
+
+  async function handleSave() {
+    if (!user) return;
+    setSaving(true);
+    try {
+      const { data: applicant, error: appErr } = await supabase
+        .from('applicants')
+        .insert({
+          user_id: user.id,
+          residency_status: residency,
+          nationality,
+          date_of_birth: dob ? format(dob, 'yyyy-MM-dd') : null,
+          employment_type: empType,
+        })
+        .select('id')
+        .single();
+
+      if (appErr || !applicant) throw appErr || new Error('Failed to create applicant');
+      const appId = applicant.id;
+
+      // Property
+      await supabase.from('property_details').insert({
+        applicant_id: appId,
+        property_value: propertyValue || null,
+        loan_amount: effectiveLoan || null,
+        ltv: ltv || null,
+        emirate,
+        transaction_type: txnType,
+        preferred_tenor_months: Math.min(tenorMonths, maxTenor),
+        nominal_rate: nominalRate,
+        stress_rate: stressRate,
+      });
+
+      // Income
+      if (incomeFields.length > 0) {
+        await supabase.from('income_fields').insert(
+          incomeFields.map(f => ({ applicant_id: appId, income_type: f.income_type, amount: f.amount, percent_considered: f.percent_considered, recurrence: f.recurrence, owner_type: 'main' }))
+        );
+      }
+
+      // Liabilities
+      if (liabilityFields.length > 0) {
+        await supabase.from('liability_fields').insert(
+          liabilityFields.map(f => ({ applicant_id: appId, liability_type: f.liability_type, amount: f.amount, credit_card_limit: f.credit_card_limit || null, recurrence: f.recurrence, closed_before_application: f.closed_before_application, liability_letter_obtained: f.liability_letter_obtained, owner_type: 'main' }))
+        );
+      }
+
+      // Co-borrowers
+      for (let i = 0; i < coBorrowers.length; i++) {
+        const cb = coBorrowers[i];
+        await supabase.from('co_borrowers').insert({
+          applicant_id: appId, index: i, name: cb.name, relationship: cb.relationship,
+          employment_type: cb.employment_type, date_of_birth: cb.date_of_birth ? format(cb.date_of_birth, 'yyyy-MM-dd') : null,
+          residency_status: cb.residency_status,
+        });
+        if (cb.incomeFields.length > 0) {
+          await supabase.from('income_fields').insert(
+            cb.incomeFields.map(f => ({ applicant_id: appId, income_type: f.income_type, amount: f.amount, percent_considered: f.percent_considered, recurrence: f.recurrence, owner_type: 'co_borrower', co_borrower_index: i }))
+          );
+        }
+        if (cb.liabilityFields.length > 0) {
+          await supabase.from('liability_fields').insert(
+            cb.liabilityFields.map(f => ({ applicant_id: appId, liability_type: f.liability_type, amount: f.amount, credit_card_limit: f.credit_card_limit || null, recurrence: f.recurrence, closed_before_application: f.closed_before_application, liability_letter_obtained: f.liability_letter_obtained, owner_type: 'co_borrower', co_borrower_index: i }))
+          );
+        }
+      }
+
+      toast.success('Qualification saved!');
+      navigate(`/results/${appId}`);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-secondary">
+      <header className="bg-primary text-primary-foreground">
+        <div className="container mx-auto flex items-center gap-4 py-4 px-6">
+          <Button variant="ghost" size="sm" className="text-primary-foreground hover:bg-accent" onClick={() => navigate('/dashboard')}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h1 className="text-xl font-semibold">New Client Qualification</h1>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-6 py-8">
+        <div className="grid gap-8 lg:grid-cols-[1fr_280px]">
+          {/* Left column — Form */}
+          <div className="space-y-6">
+            {/* SECTION 1 — Personal */}
+            <Card className="bg-background">
+              <CardHeader><CardTitle className="text-lg text-primary">1. Personal Information</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Residency Status</Label>
+                    <Select value={residency} onValueChange={setResidency}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="uae_national">UAE National</SelectItem>
+                        <SelectItem value="resident_expat">Resident Expat</SelectItem>
+                        <SelectItem value="non_resident">Non-Resident</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Nationality</Label>
+                    <Select value={nationality} onValueChange={setNationality}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {COUNTRIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Date of Birth</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className={cn("w-full mt-1 justify-start text-left font-normal", !dob && "text-muted-foreground")}>
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {dob ? format(dob, "PPP") : "Pick a date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={dob || undefined} onSelect={d => setDob(d || null)}
+                          disabled={d => d > new Date() || d < new Date("1940-01-01")} initialFocus className="p-3 pointer-events-auto" />
+                      </PopoverContent>
+                    </Popover>
+                    {age !== null && (
+                      <div className="mt-1 flex gap-3 text-xs text-muted-foreground">
+                        <span>Age: <strong className="text-primary">{age}</strong></span>
+                        <span>Max Tenor: <strong className="text-primary">{maxTenor} months</strong></span>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Employment Type</Label>
+                    <Select value={empType} onValueChange={setEmpType}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="salaried">Salaried</SelectItem>
+                        <SelectItem value="self_employed">Self-Employed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* SECTION 2 — Property */}
+            <Card className="bg-background">
+              <CardHeader><CardTitle className="text-lg text-primary">2. Property & Loan</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Property Value (AED)</Label>
+                    <Input className="mt-1" value={propertyValue ? formatCurrency(propertyValue) : ''} onChange={e => handlePropertyValueChange(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">LTV: {ltv}%</Label>
+                    <Slider className="mt-3" min={0} max={90} step={1} value={[ltv]} onValueChange={handleLtvChange} />
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Loan Amount (AED)</Label>
+                    <Input className="mt-1" value={effectiveLoan ? formatCurrency(effectiveLoan) : ''} onChange={e => handleLoanAmountChange(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Emirate</Label>
+                    <Select value={emirate} onValueChange={setEmirate}>
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {['dubai','abu_dhabi','sharjah','ajman','rak'].map(e => (
+                          <SelectItem key={e} value={e}>{e.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Transaction Type</Label>
+                    <Select value={txnType} onValueChange={setTxnType}>
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {['purchase','buyout','buyout_equity','equity','handover','off_plan'].map(t => (
+                          <SelectItem key={t} value={t}>{t.replace(/_/g, ' + ').replace(/\b\w/g, l => l.toUpperCase())}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Preferred Tenor (months)</Label>
+                    <Input type="number" className="mt-1" value={tenorMonths} onChange={e => setTenorMonths(Number(e.target.value))} max={maxTenor} />
+                    {tenorMonths > maxTenor && <p className="text-xs text-destructive mt-1">Exceeds max tenor of {maxTenor} months</p>}
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Nominal Rate %</Label>
+                    <Input type="number" step="0.01" className="mt-1" value={nominalRate} onChange={e => setNominalRate(Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Stress Rate %</Label>
+                    <Input type="number" step="0.01" className="mt-1" value={stressRate} onChange={e => setStressRate(Number(e.target.value))} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* SECTION 3 — Income */}
+            <Card className="bg-background">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg text-primary">3. Income</CardTitle>
+                  <FieldSelector title="Select income fields" options={INCOME_TYPES} selected={selectedIncomeTypes} onChange={handleIncomeTypesChange} />
+                </div>
+              </CardHeader>
+              <CardContent>
+                {incomeFields.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No income fields selected. Click the button above to add.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {incomeFields.map((f, i) => (
+                      <IncomeFieldCard key={f.income_type} entry={f}
+                        onChange={e => { const arr = [...incomeFields]; arr[i] = e; setIncomeFields(arr); }}
+                        onRemove={() => { setSelectedIncomeTypes(selectedIncomeTypes.filter(t => t !== f.income_type)); setIncomeFields(incomeFields.filter((_, j) => j !== i)); }} />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* SECTION 4 — Liabilities */}
+            <Card className="bg-background">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg text-primary">4. Liabilities</CardTitle>
+                  <FieldSelector title="Select liability fields" options={LIABILITY_TYPES} selected={selectedLiabilityTypes} onChange={handleLiabilityTypesChange} />
+                </div>
+              </CardHeader>
+              <CardContent>
+                {liabilityFields.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No liability fields selected. Click the button above to add.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {liabilityFields.map((f, i) => (
+                      <LiabilityFieldCard key={f.liability_type} entry={f}
+                        onChange={e => { const arr = [...liabilityFields]; arr[i] = e; setLiabilityFields(arr); }}
+                        onRemove={() => { setSelectedLiabilityTypes(selectedLiabilityTypes.filter(t => t !== f.liability_type)); setLiabilityFields(liabilityFields.filter((_, j) => j !== i)); }} />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* SECTION 5 — Co-borrowers */}
+            <Card className="bg-background">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg text-primary">5. Co-Borrowers</CardTitle>
+                  <Button variant="outline" size="sm" className="border-accent text-accent hover:bg-accent hover:text-accent-foreground" onClick={() => setCoBorrowers([...coBorrowers, createCoBorrower()])}>
+                    <Plus className="mr-1 h-4 w-4" /> Add co-borrower
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {coBorrowers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No co-borrowers added.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {coBorrowers.map((cb, i) => (
+                      <CoBorrowerSection key={i} index={i} data={cb}
+                        onChange={d => { const arr = [...coBorrowers]; arr[i] = d; setCoBorrowers(arr); }}
+                        onRemove={() => setCoBorrowers(coBorrowers.filter((_, j) => j !== i))} />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Save */}
+            <Button onClick={handleSave} disabled={saving} className="w-full bg-accent text-accent-foreground hover:bg-mid-blue" size="lg">
+              <Save className="mr-2 h-5 w-5" />
+              {saving ? 'Saving…' : 'Save & View Results'}
+            </Button>
+          </div>
+
+          {/* Right column — DBR Widget */}
+          <div className="hidden lg:block">
+            <div className="sticky top-8">
+              <DBRWidget
+                totalIncome={totalIncome}
+                totalLiabilities={totalLiabilities}
+                loanAmount={effectiveLoan}
+                stressRate={stressRate}
+                tenorMonths={Math.min(tenorMonths, maxTenor)}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile DBR — fixed bottom */}
+        <div className="lg:hidden fixed bottom-4 right-4 left-4 z-50">
+          <DBRWidget
+            totalIncome={totalIncome}
+            totalLiabilities={totalLiabilities}
+            loanAmount={effectiveLoan}
+            stressRate={stressRate}
+            tenorMonths={Math.min(tenorMonths, maxTenor)}
+          />
+        </div>
+      </main>
+    </div>
+  );
+}
