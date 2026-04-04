@@ -92,6 +92,23 @@ export default function QualifyNew() {
   const [nominalRate, setNominalRate] = useState(4.5);
   const [stressRate, setStressRate] = useState(7.5);
 
+  // Fetch products matching current transaction type
+  useEffect(() => {
+    async function loadProducts() {
+      const { data } = await supabase
+        .from('products')
+        .select('bank_id, rate, fixed_period_months, processing_fee_percent, valuation_fee, life_ins_monthly_percent, prop_ins_annual_percent')
+        .eq('active', true)
+        .eq('transaction_type', txnType) as any;
+      const map: Record<string, ProductData> = {};
+      for (const p of (data ?? [])) {
+        if (!map[p.bank_id]) map[p.bank_id] = p;
+      }
+      setProductsByBank(map);
+    }
+    loadProducts();
+  }, [txnType]);
+
   // Section 3 — Income
   const [selectedIncomeTypes, setSelectedIncomeTypes] = useState<string[]>([]);
   const [incomeFields, setIncomeFields] = useState<IncomeEntry[]>([]);
