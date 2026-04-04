@@ -64,7 +64,10 @@ export interface Database {
         Row: {
           id: string; applicant_id: string; property_value: number | null;
           loan_amount: number | null; ltv: number | null; emirate: string;
-          transaction_type: string; preferred_tenor_months: number; nominal_rate: number;
+          is_difc: boolean; is_al_ain: boolean;
+          transaction_type: string; property_type: string | null;
+          purpose: string | null; loan_type_preference: string;
+          preferred_tenor_months: number; nominal_rate: number;
           stress_rate: number;
         };
         Insert: Partial<Database['public']['Tables']['property_details']['Row']>;
