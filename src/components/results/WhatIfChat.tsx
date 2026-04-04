@@ -22,6 +22,14 @@ export default function WhatIfChat({ initialAnalysis }: WhatIfChatProps) {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Update the initial system message when analysis changes
+  useEffect(() => {
+    setMessages(prev => {
+      const rest = prev.filter(m => m.id !== 'initial');
+      return [{ id: 'initial', role: 'system' as const, content: initialAnalysis }, ...rest];
+    });
+  }, [initialAnalysis]);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
