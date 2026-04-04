@@ -67,6 +67,9 @@ export default function QualifyNew() {
     loadBanks();
   }, []);
 
+  // Client name
+  const [clientName, setClientName] = useState('');
+
   // Section 1 — Personal
   const [residency, setResidency] = useState('');
   const [nationality, setNationality] = useState('');
