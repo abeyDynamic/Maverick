@@ -507,7 +507,7 @@ export default function QualifyNew() {
           <DBRWidget
             totalIncome={totalIncome}
             totalLiabilities={totalLiabilities}
-            loanAmount={effectiveLoan}
+            loanAmount={loanAmount}
             stressRate={stressRate}
             tenorMonths={Math.min(tenorMonths, bindingTenor)}
           />
