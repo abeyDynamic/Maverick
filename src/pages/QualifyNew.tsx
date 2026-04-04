@@ -64,7 +64,7 @@ export default function QualifyNew() {
 
   // Derived — tenor eligibility
   const mainAge = useMemo(() => getAgeFromDob(dob), [dob]);
-  const mainTenorElig = useMemo(() => mainAge !== null ? getTenorEligibility(mainAge) : null, [mainAge]);
+  const mainTenorElig = useMemo(() => mainAge !== null ? getTenorEligibility(mainAge.totalMonths) : null, [mainAge]);
 
   // Binding tenor across all applicants
   const { bindingTenor, bindingName } = useMemo(() => {
@@ -75,7 +75,7 @@ export default function QualifyNew() {
     coBorrowers.forEach((cb, i) => {
       const cbAge = getAgeFromDob(cb.date_of_birth);
       if (cbAge !== null) {
-        const cbElig = getTenorEligibility(cbAge);
+        const cbElig = getTenorEligibility(cbAge.totalMonths);
         if (cbElig.salaried < minSalaried) {
           minSalaried = cbElig.salaried;
           bindName = cb.name || `Co-Borrower ${i + 1}`;
@@ -298,7 +298,7 @@ export default function QualifyNew() {
                     />
                     {mainAge !== null && mainTenorElig && (
                       <div className="mt-1.5 text-xs text-muted-foreground space-y-0.5">
-                        <p>Age: <strong className="text-primary">{mainAge}</strong> | Max tenor: <strong className="text-primary">{mainTenorElig.salaried} months</strong> (salaried) / <strong className="text-primary">{mainTenorElig.selfEmployed} months</strong> (self-employed)</p>
+                        <p>Age: <strong className="text-primary">{mainAge.years}</strong> years | Max tenor: <strong className="text-primary">{mainTenorElig.salaried} months</strong> (salaried) / <strong className="text-primary">{mainTenorElig.selfEmployed} months</strong> (self-employed)</p>
                         {coBorrowers.length > 0 && (
                           <p className="text-accent font-medium">Binding tenor: {bindingTenor} months based on {bindingName}</p>
                         )}

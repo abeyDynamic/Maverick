@@ -103,7 +103,8 @@ export function formatCurrency(n: number): string {
   return new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 }).format(n);
 }
 
-export function getAgeFromDob(dob: Date | null): number | null {
+/** Returns age as { years, months (total complete months) } */
+export function getAgeFromDob(dob: Date | null): { years: number; totalMonths: number } | null {
   if (!dob) return null;
   const now = new Date();
   let years = now.getFullYear() - dob.getFullYear();
@@ -113,23 +114,21 @@ export function getAgeFromDob(dob: Date | null): number | null {
     months--;
     if (months < 0) { years--; months += 12; }
   }
-  return years;
+  return { years, totalMonths: years * 12 + months };
 }
 
-export function getTenorEligibility(currentAge: number) {
-  const maxTenorYears = 25;
-  const yearsTo65 = Math.max(0, 65 - currentAge);
-  const yearsTo70 = Math.max(0, 70 - currentAge);
+/** salaried = (65×12) - ageInMonths - 3, capped at 300; self-employed = (70×12) - ageInMonths - 3, capped at 300 */
+export function getTenorEligibility(ageInMonths: number) {
   return {
-    salaried: Math.min(yearsTo65 * 12 - 3, maxTenorYears * 12),
-    selfEmployed: Math.min(yearsTo70 * 12 - 3, maxTenorYears * 12),
+    salaried: Math.min(Math.max(0, 65 * 12 - ageInMonths - 3), 300),
+    selfEmployed: Math.min(Math.max(0, 70 * 12 - ageInMonths - 3), 300),
   };
 }
 
 export function calculateMaxTenor(dob: Date | null, employmentType: string): number {
   const age = getAgeFromDob(dob);
   if (age === null) return 300;
-  const elig = getTenorEligibility(age);
+  const elig = getTenorEligibility(age.totalMonths);
   const max = employmentType === 'self_employed' ? elig.selfEmployed : elig.salaried;
   return Math.min(300, Math.max(0, max));
 }

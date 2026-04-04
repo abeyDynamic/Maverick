@@ -100,10 +100,10 @@ export function CoBorrowerSection({ index, data, onChange, onRemove }: Props) {
             {(() => {
               const cbAge = getAgeFromDob(data.date_of_birth);
               if (cbAge === null) return null;
-              const elig = getTenorEligibility(cbAge);
+              const elig = getTenorEligibility(cbAge.totalMonths);
               return (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Age: <strong className="text-primary">{cbAge}</strong> | Max tenor: <strong className="text-primary">{elig.salaried}m</strong> (salaried) / <strong className="text-primary">{elig.selfEmployed}m</strong> (self-employed)
+                  Age: <strong className="text-primary">{cbAge.years}</strong> years | Max tenor: <strong className="text-primary">{elig.salaried}m</strong> (salaried) / <strong className="text-primary">{elig.selfEmployed}m</strong> (self-employed)
                 </p>
               );
             })()}
