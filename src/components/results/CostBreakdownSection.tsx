@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { calculateStressEMI, formatCurrency } from '@/lib/mortgage-utils';
 import { cn } from '@/lib/utils';
 import type { BankResult } from './BankEligibilityTable';
@@ -11,146 +11,162 @@ interface Props {
   propertyValue: number;
   nominalRate: number;
   tenorMonths: number;
+  emirate: string;
 }
 
-interface CostItem {
+interface BankCosts {
   bank: BankResult;
-  monthlyEMI: number;
-  interestCost24: number;
-  processingFee: number | null;
+  monthlyPayment: number;
+  rateTerms: string;
+  followOnRate: string;
+  propertyInsuranceAnnual: number;
+  lifeInsuranceMonthly: number;
+  processingFeePercent: number;
+  processingFeeAED: number;
   valuationFee: number;
-  lifeInsurance: number;
-  propertyInsurance: number;
-  dldFee: number;
+  earlySettlement: string;
   mortgageRegistration: number;
+  mortgageRelease: number;
   transferCentreFee: number;
-  totalCost: number;
-  rank: number;
+  brokerFee: number;
+  totalFeesUpfront: number;
+  downPayment: number;
+  totalRequiredUpfront: number;
 }
 
-export default function CostBreakdownSection({ bankResults, loanAmount, propertyValue, nominalRate, tenorMonths }: Props) {
+export default function CostBreakdownSection({ bankResults, loanAmount, propertyValue, nominalRate, tenorMonths, emirate }: Props) {
   const approvedBanks = useMemo(() => bankResults.filter(r => r.eligible), [bankResults]);
 
-  const costItems = useMemo((): CostItem[] => {
+  const costs = useMemo((): BankCosts[] => {
     if (approvedBanks.length === 0 || !loanAmount) return [];
 
-    const items = approvedBanks.map(r => {
-      // Monthly EMI at nominal rate
-      const monthlyEMI = calculateStressEMI(loanAmount, nominalRate, tenorMonths);
-      // 24-month interest cost = (monthlyEMI × 24) - (principal paid in 24 months)
-      const totalPaid24 = monthlyEMI * 24;
-      // Calculate principal remaining after 24 months
-      const monthlyRate = nominalRate / 100 / 12;
-      let balance = loanAmount;
-      for (let i = 0; i < 24; i++) {
-        const interest = balance * monthlyRate;
-        const principal = monthlyEMI - interest;
-        balance -= principal;
-      }
-      const interestCost24 = totalPaid24 - (loanAmount - balance);
+    const isDubaiAbuSharjah = ['dubai', 'abu_dhabi', 'sharjah'].includes(emirate);
+    const valFee = isDubaiAbuSharjah ? 2500 : 3000;
 
-      const processingFee: number | null = null; // TBC - from products table
-      const valuationFee = 3500;
-      // Life insurance: 0.028% of loan per month × 24
-      const lifeInsurance = Math.round(loanAmount * 0.00028 * 24);
-      // Property insurance: 0.1% of property value annually × 2 years
-      const propertyInsurance = Math.round(propertyValue * 0.001 * 2);
-      // DLD fee: 4% of property value + AED 580
-      const dldFee = Math.round(propertyValue * 0.04 + 580);
-      // Mortgage registration: 0.25% of loan amount + AED 290
+    return approvedBanks.map(r => {
+      const monthlyPayment = calculateStressEMI(loanAmount, nominalRate, tenorMonths);
+      const rateTerms = `${nominalRate}% fixed`;
+      const followOnRate = `EIBOR 3 Month + margin`;
+      const propertyInsuranceAnnual = Math.round(propertyValue * 0.00035);
+      const lifeInsuranceMonthly = Math.round(loanAmount * 0.00018);
+      const processingFeePercent = 1; // default 1%
+      const processingFeeAED = Math.round(loanAmount * processingFeePercent / 100);
+      const earlySettlement = '1% of loan outstanding or AED 10,000 whichever is lower';
+
       const mortgageRegistration = Math.round(loanAmount * 0.0025 + 290);
+      const mortgageRelease = 0;
       const transferCentreFee = 4200;
+      const brokerFee = 0;
 
-      const totalCost = Math.round(
-        interestCost24 +
-        (processingFee ?? 0) +
-        valuationFee +
-        lifeInsurance +
-        propertyInsurance +
-        dldFee +
-        mortgageRegistration +
-        transferCentreFee
-      );
+      const totalFeesUpfront = mortgageRegistration + mortgageRelease + transferCentreFee + processingFeeAED + valFee + brokerFee;
+      const downPayment = Math.max(0, propertyValue - loanAmount);
+      const totalRequiredUpfront = totalFeesUpfront + downPayment;
 
       return {
         bank: r,
-        monthlyEMI: Math.round(monthlyEMI),
-        interestCost24: Math.round(interestCost24),
-        processingFee,
-        valuationFee,
-        lifeInsurance,
-        propertyInsurance,
-        dldFee,
+        monthlyPayment: Math.round(monthlyPayment),
+        rateTerms,
+        followOnRate,
+        propertyInsuranceAnnual,
+        lifeInsuranceMonthly,
+        processingFeePercent,
+        processingFeeAED,
+        valuationFee: valFee,
+        earlySettlement,
         mortgageRegistration,
+        mortgageRelease,
         transferCentreFee,
-        totalCost,
-        rank: 0,
+        brokerFee,
+        totalFeesUpfront,
+        downPayment,
+        totalRequiredUpfront,
       };
     });
+  }, [approvedBanks, loanAmount, propertyValue, nominalRate, tenorMonths, emirate]);
 
-    // Sort by total cost and assign ranks
-    items.sort((a, b) => a.totalCost - b.totalCost);
-    items.forEach((item, i) => { item.rank = i + 1; });
+  if (costs.length === 0) return null;
 
-    return items;
-  }, [approvedBanks, loanAmount, propertyValue, nominalRate, tenorMonths]);
+  const offerRows: { label: string; getValue: (c: BankCosts) => string; bold?: boolean }[] = [
+    { label: 'Monthly Mortgage Payment', getValue: c => `AED ${formatCurrency(c.monthlyPayment)}`, bold: true },
+    { label: 'Rate Terms', getValue: c => c.rateTerms },
+    { label: 'Follow-on Rate', getValue: c => c.followOnRate },
+    { label: 'Property Insurance (p.a.)', getValue: c => `AED ${formatCurrency(c.propertyInsuranceAnnual)}` },
+    { label: 'Life Insurance (per month)', getValue: c => `AED ${formatCurrency(c.lifeInsuranceMonthly)}` },
+    { label: 'Processing Fee', getValue: c => `${c.processingFeePercent}% — AED ${formatCurrency(c.processingFeeAED)}` },
+    { label: 'Property Valuation', getValue: c => `AED ${formatCurrency(c.valuationFee)}` },
+    { label: 'Early Settlement Fee', getValue: c => c.earlySettlement },
+  ];
 
-  if (costItems.length === 0) return null;
-
-  const rankBadge = (rank: number) => {
-    if (rank === 1) return <Badge className="bg-green-600 text-white text-[10px] px-1.5 py-0">1st — Cheapest</Badge>;
-    if (rank === 2) return <Badge className="bg-blue-600 text-white text-[10px] px-1.5 py-0">2nd</Badge>;
-    if (rank === 3) return <Badge className="bg-amber-600 text-white text-[10px] px-1.5 py-0">3rd</Badge>;
-    return <Badge variant="outline" className="text-[10px] px-1.5 py-0">{rank}th</Badge>;
-  };
+  const txnRows: { label: string; getValue: (c: BankCosts) => string; bold?: boolean }[] = [
+    { label: 'Mortgage Registration (0.25% + 290)', getValue: c => `AED ${formatCurrency(c.mortgageRegistration)}` },
+    { label: 'Mortgage Release Fee', getValue: c => `AED ${formatCurrency(c.mortgageRelease)}` },
+    { label: 'Transfer Centre Fee (incl. VAT)', getValue: c => `AED ${formatCurrency(c.transferCentreFee)}` },
+    { label: 'Bank Processing Fee', getValue: c => `AED ${formatCurrency(c.processingFeeAED)}` },
+    { label: 'Property Valuation', getValue: c => `AED ${formatCurrency(c.valuationFee)}` },
+    { label: 'Mortgage Broker Fee', getValue: c => `AED ${formatCurrency(c.brokerFee)}` },
+    { label: 'TOTAL FEES UPFRONT', getValue: c => `AED ${formatCurrency(c.totalFeesUpfront)}`, bold: true },
+    { label: 'Down Payment', getValue: c => `AED ${formatCurrency(c.downPayment)}`, bold: true },
+    { label: 'TOTAL REQUIRED UPFRONT', getValue: c => `AED ${formatCurrency(c.totalRequiredUpfront)}`, bold: true },
+  ];
 
   return (
     <Card className="bg-background">
       <CardHeader className="py-3 px-4">
-        <CardTitle className="text-sm font-semibold text-primary">24-Month Cost Breakdown — Approved Banks</CardTitle>
+        <CardTitle className="text-sm font-semibold text-primary">Mortgage Proposal — Approved Banks</CardTitle>
       </CardHeader>
-      <CardContent className="px-4 pb-4">
-        <div className="grid gap-3">
-          {costItems.map(item => (
-            <div
-              key={item.bank.bank.id}
-              className={cn(
-                'rounded-lg border p-3 space-y-2',
-                item.rank === 1 ? 'border-green-300 bg-green-50/50 dark:bg-green-950/10' : 'bg-background'
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-sm text-primary">{item.bank.bank.bank_name}</span>
-                {rankBadge(item.rank)}
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                <Row label="Monthly EMI (nominal)" value={`AED ${formatCurrency(item.monthlyEMI)}`} />
-                <Row label="24-month interest cost" value={`AED ${formatCurrency(item.interestCost24)}`} />
-                <Row label="Processing fee" value={item.processingFee !== null ? `AED ${formatCurrency(item.processingFee)}` : 'TBC'} muted={item.processingFee === null} />
-                <Row label="Valuation fee" value={`AED ${formatCurrency(item.valuationFee)}`} />
-                <Row label="Life insurance (24m)" value={`AED ${formatCurrency(item.lifeInsurance)}`} />
-                <Row label="Property insurance (2yr)" value={`AED ${formatCurrency(item.propertyInsurance)}`} />
-                <Row label="DLD fee (4% + 580)" value={`AED ${formatCurrency(item.dldFee)}`} />
-                <Row label="Mortgage registration" value={`AED ${formatCurrency(item.mortgageRegistration)}`} />
-                <Row label="Transfer centre fee" value={`AED ${formatCurrency(item.transferCentreFee)}`} />
-              </div>
-              <div className="flex items-center justify-between pt-1 border-t text-sm font-bold">
-                <span className="text-primary">Total 24-Month Cost</span>
-                <span className={item.rank === 1 ? 'text-green-600' : 'text-primary'}>AED {formatCurrency(item.totalCost)}</span>
-              </div>
-            </div>
-          ))}
-        </div>
+      <CardContent className="p-0 overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs min-w-[180px] sticky left-0 bg-background z-10"> </TableHead>
+              {costs.map(c => (
+                <TableHead key={c.bank.bank.id} className="text-xs text-center min-w-[160px]">
+                  {c.bank.bank.bank_name}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {/* Offer Details Header */}
+            <TableRow className="bg-muted/50">
+              <TableCell colSpan={costs.length + 1} className="py-1.5 text-xs font-bold text-primary uppercase tracking-wide">
+                Offer Details
+              </TableCell>
+            </TableRow>
+            {offerRows.map(row => (
+              <TableRow key={row.label}>
+                <TableCell className={cn('text-xs sticky left-0 bg-background py-1.5', row.bold && 'font-semibold')}>
+                  {row.label}
+                </TableCell>
+                {costs.map(c => (
+                  <TableCell key={c.bank.bank.id} className={cn('text-xs text-center py-1.5', row.bold && 'font-semibold')}>
+                    {row.getValue(c)}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+
+            {/* Transaction Fees Header */}
+            <TableRow className="bg-muted/50">
+              <TableCell colSpan={costs.length + 1} className="py-1.5 text-xs font-bold text-primary uppercase tracking-wide">
+                Transaction Fees
+              </TableCell>
+            </TableRow>
+            {txnRows.map(row => (
+              <TableRow key={row.label} className={row.bold ? 'border-t' : ''}>
+                <TableCell className={cn('text-xs sticky left-0 bg-background py-1.5', row.bold && 'font-bold')}>
+                  {row.label}
+                </TableCell>
+                {costs.map(c => (
+                  <TableCell key={c.bank.bank.id} className={cn('text-xs text-center py-1.5', row.bold && 'font-bold')}>
+                    {row.getValue(c)}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </CardContent>
     </Card>
-  );
-}
-
-function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
-  return (
-    <>
-      <span className="text-muted-foreground">{label}</span>
-      <span className={cn('text-right font-medium', muted ? 'text-muted-foreground italic' : 'text-primary')}>{value}</span>
-    </>
   );
 }
