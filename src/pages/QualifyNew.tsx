@@ -51,9 +51,10 @@ export default function QualifyNew() {
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
 
-  // Banks & notes from Supabase
+  // Banks, notes & products from Supabase
   const [banks, setBanks] = useState<Bank[]>([]);
   const [qualNotes, setQualNotes] = useState<QualNote[]>([]);
+  const [productsByBank, setProductsByBank] = useState<Record<string, ProductData>>({});
 
   useEffect(() => {
     async function loadBanks() {
@@ -66,6 +67,24 @@ export default function QualifyNew() {
     }
     loadBanks();
   }, []);
+
+  // Fetch products matching current transaction type
+  useEffect(() => {
+    async function loadProducts() {
+      const { data } = await supabase
+        .from('products')
+        .select('bank_id, rate, fixed_period_months, processing_fee_percent, valuation_fee, life_ins_monthly_percent, prop_ins_annual_percent')
+        .eq('active', true)
+        .eq('transaction_type', txnType) as any;
+      const map: Record<string, ProductData> = {};
+      for (const p of (data ?? [])) {
+        // First match per bank wins (could refine by segment later)
+        if (!map[p.bank_id]) map[p.bank_id] = p;
+      }
+      setProductsByBank(map);
+    }
+    loadProducts();
+  }, [txnType]);
 
   // Client name
   const [clientName, setClientName] = useState('');
