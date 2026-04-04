@@ -301,6 +301,17 @@ export default function QualifyNew() {
         {/* LEFT PANEL — Form (40%) */}
         <div className="w-[40%] bg-background overflow-y-auto border-r">
           <div className="p-6 space-y-5">
+            {/* CLIENT NAME */}
+            <div>
+              <Label className="text-xs text-muted-foreground font-semibold">Client Name</Label>
+              <Input
+                className="mt-1 h-9 text-sm"
+                placeholder="Enter client name…"
+                value={clientName}
+                onChange={e => setClientName(e.target.value)}
+              />
+            </div>
+
             {/* SECTION 1 — Personal */}
             <Card>
               <CardHeader className="py-3 px-4"><CardTitle className="text-sm font-semibold text-primary">1. Personal Information</CardTitle></CardHeader>
