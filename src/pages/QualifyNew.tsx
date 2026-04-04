@@ -75,7 +75,7 @@ export default function QualifyNew() {
     coBorrowers.forEach((cb, i) => {
       const cbAge = getAgeFromDob(cb.date_of_birth);
       if (cbAge !== null) {
-        const cbElig = getTenorEligibility(cbAge);
+        const cbElig = getTenorEligibility(cbAge.totalMonths);
         if (cbElig.salaried < minSalaried) {
           minSalaried = cbElig.salaried;
           bindName = cb.name || `Co-Borrower ${i + 1}`;
