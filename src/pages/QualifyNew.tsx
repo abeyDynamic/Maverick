@@ -19,6 +19,7 @@ import { CoBorrowerSection, CoBorrowerData, createCoBorrower } from '@/component
 import DBRSummaryBar from '@/components/results/DBRSummaryBar';
 import BankEligibilityTable, { useBankResults, buildWhatIfAnalysis } from '@/components/results/BankEligibilityTable';
 import WhatIfChat from '@/components/results/WhatIfChat';
+import CostBreakdownSection from '@/components/results/CostBreakdownSection';
 import {
   COUNTRIES, INCOME_TYPES, LIABILITY_TYPES, TRANSACTION_TYPES, PROPERTY_TYPES,
   PURPOSES, LOAN_TYPE_PREFERENCES, EMIRATES,
@@ -65,6 +66,9 @@ export default function QualifyNew() {
     }
     loadBanks();
   }, []);
+
+  // Client name
+  const [clientName, setClientName] = useState('');
 
   // Section 1 — Personal
   const [residency, setResidency] = useState('');
@@ -212,11 +216,12 @@ export default function QualifyNew() {
         .from('applicants')
         .insert({
           user_id: user.id,
+          client_name: clientName || null,
           residency_status: residency,
           nationality,
           date_of_birth: dob ? format(dob, 'yyyy-MM-dd') : null,
           employment_type: empType || null,
-        })
+        } as any)
         .select('id')
         .single();
 
@@ -296,6 +301,17 @@ export default function QualifyNew() {
         {/* LEFT PANEL — Form (40%) */}
         <div className="w-[40%] bg-background overflow-y-auto border-r">
           <div className="p-6 space-y-5">
+            {/* CLIENT NAME */}
+            <div>
+              <Label className="text-xs text-muted-foreground font-semibold">Client Name</Label>
+              <Input
+                className="mt-1 h-9 text-sm"
+                placeholder="Enter client name…"
+                value={clientName}
+                onChange={e => setClientName(e.target.value)}
+              />
+            </div>
+
             {/* SECTION 1 — Personal */}
             <Card>
               <CardHeader className="py-3 px-4"><CardTitle className="text-sm font-semibold text-primary">1. Personal Information</CardTitle></CardHeader>
@@ -527,6 +543,11 @@ export default function QualifyNew() {
         {/* RIGHT PANEL — Results (60%) */}
         <div className="w-[60%] bg-secondary overflow-y-auto">
           <div className="p-6 space-y-4">
+            {/* Client name display */}
+            {clientName && (
+              <p className="text-sm font-semibold text-primary">{clientName}</p>
+            )}
+
             {/* Pinned DBR Summary */}
             <div className="sticky top-0 z-10">
               <DBRSummaryBar
@@ -547,6 +568,15 @@ export default function QualifyNew() {
               loanAmount={loanAmount}
               tenorMonths={effectiveTenor}
               stressRate={stressRate}
+            />
+
+            {/* Cost Breakdown */}
+            <CostBreakdownSection
+              bankResults={bankResults}
+              loanAmount={loanAmount}
+              propertyValue={propertyValue}
+              nominalRate={nominalRate}
+              tenorMonths={effectiveTenor}
             />
 
             {/* What-If Chat */}

@@ -27,6 +27,7 @@ export interface Database {
       applicants: {
         Row: {
           id: string; user_id: string; created_at: string;
+          client_name: string | null;
           residency_status: string | null; nationality: string | null; date_of_birth: string | null;
           employment_type: string | null; employer_name: string | null; employer_category: string | null;
         };
