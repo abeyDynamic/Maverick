@@ -42,6 +42,10 @@ interface Bank {
 
 type ProductRow = ProductData & {
   active?: boolean | null;
+  life_ins_monthly?: number | string | null;
+  mortgage_type?: string | null;
+  processing_fee?: number | string | null;
+  prop_ins_annual?: number | string | null;
   product_type?: string | null;
   residency?: string | null;
   segment?: string | null;
@@ -50,22 +54,56 @@ type ProductRow = ProductData & {
   validity_end?: string | null;
 };
 
+interface ProductSelectionContext {
+  applicantResidency: string | null;
+  applicantSegment: string | null;
+  preferredFixedMonths: number;
+  preferredTransactionType: string;
+  salaryTransfer: boolean;
+}
+
 const DEFAULT_COMPARISON_FIXED_MONTHS = 24;
 
+function normalizeMatchValue(value: string | null | undefined): string {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function toNullableNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[^0-9.-]+/g, '');
+    if (!cleaned) return null;
+
+    const parsed = Number(cleaned);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return null;
+}
+
 function getApplicantSegment(employmentType: string): string | null {
-  if (employmentType === 'salaried') return 'salaried';
-  if (employmentType === 'self_employed') return 'self_employed';
+  const normalized = normalizeMatchValue(employmentType);
+  if (!normalized) return null;
+  if (normalized.includes('salary')) return 'salaried';
+  if (normalized.includes('self')) return 'self_employed';
   return null;
 }
 
 function getApplicantResidency(residencyStatus: string): string | null {
-  if (!residencyStatus) return null;
-  return residencyStatus === 'non_resident' ? 'non_resident' : 'resident_expat';
+  const normalized = normalizeMatchValue(residencyStatus);
+  if (!normalized) return null;
+  return normalized === 'non_resident' ? 'non_resident' : 'resident_expat';
 }
 
 function parseFixedPeriodMonths(product: Pick<ProductRow, 'fixed_period' | 'fixed_period_months'>): number | null {
-  if (typeof product.fixed_period_months === 'number' && Number.isFinite(product.fixed_period_months)) {
-    return product.fixed_period_months;
+  const fixedPeriodMonths = toNullableNumber(product.fixed_period_months);
+  if (fixedPeriodMonths !== null) {
+    return fixedPeriodMonths;
   }
 
   const fixedPeriod = product.fixed_period?.toLowerCase().trim();
@@ -84,45 +122,129 @@ function formatRateValue(rate: number): string {
   return rate.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
 }
 
+function matchesApplicantSegment(productSegment: string | null | undefined, applicantSegment: string | null): boolean {
+  if (!applicantSegment) return true;
+
+  const normalizedSegment = normalizeMatchValue(productSegment);
+  if (!normalizedSegment || ['all', 'any', 'both'].includes(normalizedSegment)) return true;
+
+  return normalizedSegment === applicantSegment;
+}
+
+function matchesApplicantResidency(productResidency: string | null | undefined, applicantResidency: string | null): boolean {
+  if (!applicantResidency) return true;
+
+  const normalizedResidency = normalizeMatchValue(productResidency);
+  if (!normalizedResidency || ['all', 'any', 'both'].includes(normalizedResidency)) return true;
+
+  if (applicantResidency === 'non_resident') {
+    return normalizedResidency === 'non_resident';
+  }
+
+  return [
+    'resident_expat',
+    'resident',
+    'expat',
+    'uae_national',
+    'national',
+  ].includes(normalizedResidency);
+}
+
+function getTransactionMatchPriority(productTransactionType: string | null | undefined, preferredTransactionType: string): number {
+  const normalizedProductTransaction = normalizeMatchValue(productTransactionType);
+  const normalizedPreferredTransaction = normalizeMatchValue(preferredTransactionType);
+
+  if (!normalizedPreferredTransaction) return 0;
+  if (!normalizedProductTransaction || ['all', 'any', 'both'].includes(normalizedProductTransaction)) return 1;
+  if (normalizedProductTransaction === normalizedPreferredTransaction) return 0;
+
+  if (
+    normalizedPreferredTransaction === 'handover_resale' &&
+    ['handover', 'resale'].includes(normalizedProductTransaction)
+  ) {
+    return 1;
+  }
+
+  if (normalizedPreferredTransaction === 'buyout_equity' && normalizedProductTransaction === 'buyout') {
+    return 1;
+  }
+
+  return 2;
+}
+
 function formatMatchedRateLabel(product: ProductRow): string {
   const fixedMonths = parseFixedPeriodMonths(product);
   const fixedLabel = fixedMonths
     ? `${fixedMonths % 12 === 0 ? `${fixedMonths / 12}yr` : `${fixedMonths}m`} fixed`
     : 'variable';
   const salaryTransferLabel = product.salary_transfer ? ' STL' : '';
+  const rate = toNullableNumber(product.rate) ?? 0;
 
-  return `Rate: ${formatRateValue(product.rate ?? 0)}% (${fixedLabel}${salaryTransferLabel})`;
+  return `Rate: ${formatRateValue(rate)}% (${fixedLabel}${salaryTransferLabel})`;
 }
 
-function selectPreferredProduct(products: ProductRow[], salaryTransfer: boolean): ProductData | null {
+function selectPreferredProduct(products: ProductRow[], context: ProductSelectionContext): ProductData | null {
   if (products.length === 0) return null;
 
-  const preferredSalaryPool = salaryTransfer
-    ? products.filter(product => product.salary_transfer === true)
-    : products;
-  const salaryPool = preferredSalaryPool.length > 0 ? preferredSalaryPool : products;
+  const matchedProducts = products.filter(product => (
+    matchesApplicantSegment(product.segment, context.applicantSegment) &&
+    matchesApplicantResidency(product.residency, context.applicantResidency)
+  ));
 
-  const exactFixedPool = salaryPool.filter(product => parseFixedPeriodMonths(product) === DEFAULT_COMPARISON_FIXED_MONTHS);
-  const candidatePool = exactFixedPool.length > 0 ? exactFixedPool : salaryPool;
-  const ratedPool = candidatePool.filter(product => product.rate != null);
-  if (ratedPool.length === 0) return null;
+  const ratedProducts = matchedProducts
+    .map(product => ({
+      ...product,
+      fixedMonths: parseFixedPeriodMonths(product),
+      numericRate: toNullableNumber(product.rate),
+      transactionPriority: getTransactionMatchPriority(product.transaction_type, context.preferredTransactionType),
+    }))
+    .filter(product => product.numericRate !== null);
 
-  const chosen = [...ratedPool].sort((a, b) => (a.rate ?? Number.POSITIVE_INFINITY) - (b.rate ?? Number.POSITIVE_INFINITY))[0];
+  if (ratedProducts.length === 0) return null;
+
+  const chosen = [...ratedProducts].sort((a, b) => {
+    if (a.transactionPriority !== b.transactionPriority) {
+      return a.transactionPriority - b.transactionPriority;
+    }
+
+    if (context.salaryTransfer) {
+      const salaryTransferPriorityA = a.salary_transfer === true ? 0 : 1;
+      const salaryTransferPriorityB = b.salary_transfer === true ? 0 : 1;
+      if (salaryTransferPriorityA !== salaryTransferPriorityB) {
+        return salaryTransferPriorityA - salaryTransferPriorityB;
+      }
+    }
+
+    const fixedPeriodPriorityA = a.fixedMonths === context.preferredFixedMonths ? 0 : a.fixedMonths === null ? 2 : 1;
+    const fixedPeriodPriorityB = b.fixedMonths === context.preferredFixedMonths ? 0 : b.fixedMonths === null ? 2 : 1;
+    if (fixedPeriodPriorityA !== fixedPeriodPriorityB) {
+      return fixedPeriodPriorityA - fixedPeriodPriorityB;
+    }
+
+    const fixedPeriodDistanceA = a.fixedMonths === null ? Number.POSITIVE_INFINITY : Math.abs(a.fixedMonths - context.preferredFixedMonths);
+    const fixedPeriodDistanceB = b.fixedMonths === null ? Number.POSITIVE_INFINITY : Math.abs(b.fixedMonths - context.preferredFixedMonths);
+    if (fixedPeriodDistanceA !== fixedPeriodDistanceB) {
+      return fixedPeriodDistanceA - fixedPeriodDistanceB;
+    }
+
+    return (a.numericRate ?? Number.POSITIVE_INFINITY) - (b.numericRate ?? Number.POSITIVE_INFINITY);
+  })[0];
+
   if (!chosen) return null;
 
   return {
     bank_id: chosen.bank_id,
-    rate: chosen.rate ?? null,
-    fixed_period_months: chosen.fixed_period_months ?? parseFixedPeriodMonths(chosen),
-    processing_fee_percent: chosen.processing_fee_percent ?? null,
-    valuation_fee: chosen.valuation_fee ?? null,
-    life_ins_monthly_percent: chosen.life_ins_monthly_percent ?? null,
-    prop_ins_annual_percent: chosen.prop_ins_annual_percent ?? null,
-    follow_on_margin: chosen.follow_on_margin ?? null,
+    rate: chosen.numericRate,
+    fixed_period_months: chosen.fixedMonths,
+    processing_fee_percent: toNullableNumber(chosen.processing_fee_percent) ?? toNullableNumber(chosen.processing_fee),
+    valuation_fee: toNullableNumber(chosen.valuation_fee),
+    life_ins_monthly_percent: toNullableNumber(chosen.life_ins_monthly_percent) ?? toNullableNumber(chosen.life_ins_monthly),
+    prop_ins_annual_percent: toNullableNumber(chosen.prop_ins_annual_percent) ?? toNullableNumber(chosen.prop_ins_annual),
+    follow_on_margin: toNullableNumber(chosen.follow_on_margin),
     eibor_benchmark: chosen.eibor_benchmark ?? null,
     salary_transfer: chosen.salary_transfer ?? false,
     fixed_period: chosen.fixed_period ?? null,
-    comparison_fixed_months: DEFAULT_COMPARISON_FIXED_MONTHS,
+    comparison_fixed_months: context.preferredFixedMonths,
     rate_label: formatMatchedRateLabel(chosen),
   };
 }
@@ -186,15 +308,12 @@ export default function QualifyNew() {
 
       const { data } = await supabase
         .from('products')
-        .select('*')
-        .eq('transaction_type', txnType) as any;
+        .select('*') as any;
 
       const filteredProducts = ((data ?? []) as ProductRow[]).filter(product => {
-        if (!product.bank_id || product.rate == null) return false;
+        if (!product.bank_id || toNullableNumber(product.rate) === null) return false;
         if (typeof product.active === 'boolean' && !product.active) return false;
-        if (typeof product.status === 'string' && product.status !== 'active') return false;
-        if (applicantSegment && product.segment !== applicantSegment) return false;
-        if (applicantResidency && product.residency !== applicantResidency) return false;
+        if (product.status && normalizeMatchValue(product.status) !== 'active') return false;
 
         if (product.validity_end) {
           const validityEnd = new Date(product.validity_end);
@@ -213,7 +332,13 @@ export default function QualifyNew() {
 
       const map: Record<string, ProductData> = {};
       Object.entries(groupedProducts).forEach(([bankId, bankProducts]) => {
-        const selectedProduct = selectPreferredProduct(bankProducts, salaryTransfer);
+        const selectedProduct = selectPreferredProduct(bankProducts, {
+          applicantResidency,
+          applicantSegment,
+          preferredFixedMonths: DEFAULT_COMPARISON_FIXED_MONTHS,
+          preferredTransactionType: txnType,
+          salaryTransfer,
+        });
         if (selectedProduct) {
           map[bankId] = selectedProduct;
         }
