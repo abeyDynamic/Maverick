@@ -601,6 +601,8 @@ export default function QualifyNew() {
               loanAmount={loanAmount}
               tenorMonths={effectiveTenor}
               stressRate={stressRate}
+              employmentType={empType}
+              residencyStatus={residency}
             />
 
             {/* Cost Breakdown */}
