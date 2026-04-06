@@ -14,6 +14,10 @@ export interface ProductData {
   valuation_fee: number | null;
   life_ins_monthly_percent: number | null;
   prop_ins_annual_percent: number | null;
+  follow_on_margin: number | null;
+  eibor_benchmark: number | null;
+  salary_transfer: boolean;
+  fixed_period: string | null;
 }
 
 interface Props {
@@ -172,11 +176,21 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs min-w-[200px] sticky left-0 bg-background z-10"> </TableHead>
-              {costs.map(c => (
-                <TableHead key={c.bank.bank.id} className="text-xs text-center min-w-[160px]">
-                  {c.bank.bank.bank_name}
-                </TableHead>
-              ))}
+              {costs.map(c => {
+                const prod = productsByBank[c.bank.bank.id];
+                return (
+                  <TableHead key={c.bank.bank.id} className="text-xs text-center min-w-[160px]">
+                    <div className="font-semibold">{c.bank.bank.bank_name}</div>
+                    {prod?.rate != null && (
+                      <div className="text-[9px] text-muted-foreground font-normal mt-0.5 space-y-0.5">
+                        <div>{prod.fixed_period ?? '2yr'} fixed @ {prod.rate}%</div>
+                        {prod.follow_on_margin != null && <div>Follow-on: EIBOR + {prod.follow_on_margin}%</div>}
+                        {prod.eibor_benchmark != null && <div>EIBOR: {prod.eibor_benchmark}%</div>}
+                      </div>
+                    )}
+                  </TableHead>
+                );
+              })}
             </TableRow>
           </TableHeader>
           <TableBody>
