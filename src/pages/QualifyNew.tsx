@@ -40,6 +40,93 @@ interface Bank {
   max_loan_amount: number | null;
 }
 
+type ProductRow = ProductData & {
+  active?: boolean | null;
+  product_type?: string | null;
+  residency?: string | null;
+  segment?: string | null;
+  status?: string | null;
+  transaction_type?: string | null;
+  validity_end?: string | null;
+};
+
+const DEFAULT_COMPARISON_FIXED_MONTHS = 24;
+
+function getApplicantSegment(employmentType: string): string | null {
+  if (employmentType === 'salaried') return 'salaried';
+  if (employmentType === 'self_employed') return 'self_employed';
+  return null;
+}
+
+function getApplicantResidency(residencyStatus: string): string | null {
+  if (!residencyStatus) return null;
+  return residencyStatus === 'non_resident' ? 'non_resident' : 'resident_expat';
+}
+
+function parseFixedPeriodMonths(product: Pick<ProductRow, 'fixed_period' | 'fixed_period_months'>): number | null {
+  if (typeof product.fixed_period_months === 'number' && Number.isFinite(product.fixed_period_months)) {
+    return product.fixed_period_months;
+  }
+
+  const fixedPeriod = product.fixed_period?.toLowerCase().trim();
+  if (!fixedPeriod || fixedPeriod.includes('variable')) return null;
+
+  const yearMatch = fixedPeriod.match(/(\d+)\s*yr/);
+  if (yearMatch) return Number(yearMatch[1]) * 12;
+
+  const monthMatch = fixedPeriod.match(/(\d+)\s*(?:month|months|m)\b/);
+  if (monthMatch) return Number(monthMatch[1]);
+
+  return null;
+}
+
+function formatRateValue(rate: number): string {
+  return rate.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+}
+
+function formatMatchedRateLabel(product: ProductRow): string {
+  const fixedMonths = parseFixedPeriodMonths(product);
+  const fixedLabel = fixedMonths
+    ? `${fixedMonths % 12 === 0 ? `${fixedMonths / 12}yr` : `${fixedMonths}m`} fixed`
+    : 'variable';
+  const salaryTransferLabel = product.salary_transfer ? ' STL' : '';
+
+  return `Rate: ${formatRateValue(product.rate ?? 0)}% (${fixedLabel}${salaryTransferLabel})`;
+}
+
+function selectPreferredProduct(products: ProductRow[], salaryTransfer: boolean): ProductData | null {
+  if (products.length === 0) return null;
+
+  const preferredSalaryPool = salaryTransfer
+    ? products.filter(product => product.salary_transfer === true)
+    : products;
+  const salaryPool = preferredSalaryPool.length > 0 ? preferredSalaryPool : products;
+
+  const exactFixedPool = salaryPool.filter(product => parseFixedPeriodMonths(product) === DEFAULT_COMPARISON_FIXED_MONTHS);
+  const candidatePool = exactFixedPool.length > 0 ? exactFixedPool : salaryPool;
+  const ratedPool = candidatePool.filter(product => product.rate != null);
+  if (ratedPool.length === 0) return null;
+
+  const chosen = [...ratedPool].sort((a, b) => (a.rate ?? Number.POSITIVE_INFINITY) - (b.rate ?? Number.POSITIVE_INFINITY))[0];
+  if (!chosen) return null;
+
+  return {
+    bank_id: chosen.bank_id,
+    rate: chosen.rate ?? null,
+    fixed_period_months: chosen.fixed_period_months ?? parseFixedPeriodMonths(chosen),
+    processing_fee_percent: chosen.processing_fee_percent ?? null,
+    valuation_fee: chosen.valuation_fee ?? null,
+    life_ins_monthly_percent: chosen.life_ins_monthly_percent ?? null,
+    prop_ins_annual_percent: chosen.prop_ins_annual_percent ?? null,
+    follow_on_margin: chosen.follow_on_margin ?? null,
+    eibor_benchmark: chosen.eibor_benchmark ?? null,
+    salary_transfer: chosen.salary_transfer ?? false,
+    fixed_period: chosen.fixed_period ?? null,
+    comparison_fixed_months: DEFAULT_COMPARISON_FIXED_MONTHS,
+    rate_label: formatMatchedRateLabel(chosen),
+  };
+}
+
 // QualNote imported from BankEligibilityTable
 
 export default function QualifyNew() {
@@ -89,41 +176,54 @@ export default function QualifyNew() {
   const [nominalRate, setNominalRate] = useState(4.5);
   const [stressRate, setStressRate] = useState(7.5);
 
-  // Fetch products matching current transaction type + salary transfer, with fixed_period priority
+  // Fetch products and select the best-matched rate per bank for cost comparison
   useEffect(() => {
     async function loadProducts() {
-      // Map employment type to product segment
-      const segment = empType === 'self_employed' ? 'self_employed' : 'salaried';
+      const applicantSegment = getApplicantSegment(empType);
+      const applicantResidency = getApplicantResidency(residency);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-      let query = supabase
+      const { data } = await supabase
         .from('products')
-        .select('bank_id, rate, fixed_period_months, fixed_period, processing_fee_percent, valuation_fee, life_ins_monthly_percent, prop_ins_annual_percent, follow_on_margin, eibor_benchmark, salary_transfer')
-        .eq('active', true)
-        .eq('transaction_type', txnType)
-        .eq('salary_transfer', salaryTransfer);
+        .select('*')
+        .eq('transaction_type', txnType) as any;
 
-      // Filter by segment if employment type is set
-      if (empType) {
-        query = query.eq('segment', segment);
-      }
+      const filteredProducts = ((data ?? []) as ProductRow[]).filter(product => {
+        if (!product.bank_id || product.rate == null) return false;
+        if (typeof product.active === 'boolean' && !product.active) return false;
+        if (typeof product.status === 'string' && product.status !== 'active') return false;
+        if (applicantSegment && product.segment !== applicantSegment) return false;
+        if (applicantResidency && product.residency !== applicantResidency) return false;
 
-      const { data } = await query as any;
-
-      // Priority: 2yr > 3yr > variable
-      const PRIORITY: Record<string, number> = { '2yr': 0, '3yr': 1, 'variable': 2 };
-      const map: Record<string, ProductData> = {};
-      for (const p of (data ?? [])) {
-        const existing = map[p.bank_id];
-        const pPriority = PRIORITY[p.fixed_period] ?? 99;
-        const existingPriority = existing ? (PRIORITY[existing.fixed_period ?? ''] ?? 99) : 999;
-        if (pPriority < existingPriority) {
-          map[p.bank_id] = p;
+        if (product.validity_end) {
+          const validityEnd = new Date(product.validity_end);
+          validityEnd.setHours(0, 0, 0, 0);
+          if (!(validityEnd > today)) return false;
         }
-      }
+
+        return true;
+      });
+
+      const groupedProducts = filteredProducts.reduce<Record<string, ProductRow[]>>((acc, product) => {
+        if (!acc[product.bank_id]) acc[product.bank_id] = [];
+        acc[product.bank_id].push(product);
+        return acc;
+      }, {});
+
+      const map: Record<string, ProductData> = {};
+      Object.entries(groupedProducts).forEach(([bankId, bankProducts]) => {
+        const selectedProduct = selectPreferredProduct(bankProducts, salaryTransfer);
+        if (selectedProduct) {
+          map[bankId] = selectedProduct;
+        }
+      });
+
       setProductsByBank(map);
     }
+
     loadProducts();
-  }, [txnType, salaryTransfer, empType]);
+  }, [txnType, salaryTransfer, empType, residency]);
 
   // Section 3 — Income
   const [selectedIncomeTypes, setSelectedIncomeTypes] = useState<string[]>([]);

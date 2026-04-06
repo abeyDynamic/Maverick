@@ -15,9 +15,11 @@ export interface ProductData {
   life_ins_monthly_percent: number | null;
   prop_ins_annual_percent: number | null;
   follow_on_margin: number | null;
-  eibor_benchmark: number | null;
+  eibor_benchmark: number | string | null;
   salary_transfer: boolean;
   fixed_period: string | null;
+  comparison_fixed_months?: number | null;
+  rate_label?: string | null;
 }
 
 interface Props {
@@ -33,6 +35,7 @@ interface Props {
 interface BankCosts {
   bank: BankResult;
   usedRate: number;
+  rateLabel: string;
   rateSource: 'product' | 'manual';
   emi: number;
   lifeInsMonth: number;
@@ -82,12 +85,13 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
       // Rate: product rate if available, else manual fallback
       const usedRate = product?.rate ?? nominalRate;
       const rateSource: 'product' | 'manual' = product?.rate != null ? 'product' : 'manual';
+      const rateLabel = product?.rate_label ?? `Rate: ${usedRate.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')}% (manual)`;
 
       // Defaults with product overrides
       const lifeInsRate = product?.life_ins_monthly_percent != null ? product.life_ins_monthly_percent / 100 : 0.00018;
       const propInsRate = product?.prop_ins_annual_percent != null ? product.prop_ins_annual_percent / 100 : 0.00035;
       const processingFeePercent = product?.processing_fee_percent ?? 1;
-      const fixedMonths = product?.fixed_period_months ?? 24;
+      const fixedMonths = product?.comparison_fixed_months ?? product?.fixed_period_months ?? 24;
       const valFee = product?.valuation_fee ?? defaultValFee;
 
       const emi = Math.round(calcEMI(loanAmount, usedRate, tenorMonths));
@@ -108,7 +112,7 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
       const grandTotal = fixedPeriodTotal + upfrontExclDown;
 
       return {
-        bank: r, usedRate, rateSource, emi, lifeInsMonth, propInsMonth, totalMonthly,
+        bank: r, usedRate, rateLabel, rateSource, emi, lifeInsMonth, propInsMonth, totalMonthly,
         fixedMonths, fixedPeriodTotal, rank: 0,
         downPayment, dldFee, mortgageReg, transferCentre,
         processingFeePercent, processingFeeAED, valuationFee: valFee,
@@ -176,21 +180,12 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs min-w-[200px] sticky left-0 bg-background z-10"> </TableHead>
-              {costs.map(c => {
-                const prod = productsByBank[c.bank.bank.id];
-                return (
-                  <TableHead key={c.bank.bank.id} className="text-xs text-center min-w-[160px]">
-                    <div className="font-semibold">{c.bank.bank.bank_name}</div>
-                    {prod?.rate != null && (
-                      <div className="text-[9px] text-muted-foreground font-normal mt-0.5 space-y-0.5">
-                        <div>{prod.fixed_period ?? '2yr'} fixed @ {prod.rate}%</div>
-                        {prod.follow_on_margin != null && <div>Follow-on: EIBOR + {prod.follow_on_margin}%</div>}
-                        {prod.eibor_benchmark != null && <div>EIBOR: {prod.eibor_benchmark}%</div>}
-                      </div>
-                    )}
-                  </TableHead>
-                );
-              })}
+              {costs.map(c => (
+                <TableHead key={c.bank.bank.id} className="text-xs text-center min-w-[160px]">
+                  <div className="font-semibold">{c.bank.bank.bank_name}</div>
+                  <div className="text-[9px] text-muted-foreground font-normal mt-0.5">{c.rateLabel}</div>
+                </TableHead>
+              ))}
             </TableRow>
           </TableHeader>
           <TableBody>
