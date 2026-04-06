@@ -86,13 +86,10 @@ function toNullableNumber(value: unknown): number | null {
   return null;
 }
 
-/** Convert rate to percentage if stored as decimal (e.g. 0.0399 → 3.99) */
-function normalizeRateToPercent(rate: number | null): number | null {
+/** Normalize product rate to annual decimal form (e.g. 0.0399 stays 0.0399, 3.99 becomes 0.0399) */
+function normalizeRateToDecimal(rate: number | null): number | null {
   if (rate === null) return null;
-  // Rates stored as decimals (< 1) need to be multiplied by 100
-  // e.g. 0.0399 → 3.99%, 0.045 → 4.5%
-  // Rates already in percent form (e.g. 3.99, 4.5) are left as-is
-  return rate < 1 ? rate * 100 : rate;
+  return rate > 1 ? rate / 100 : rate;
 }
 
 function getApplicantSegment(employmentType: string): string | null {
@@ -128,7 +125,7 @@ function parseFixedPeriodMonths(product: Pick<ProductRow, 'fixed_period' | 'fixe
 }
 
 function formatRateValue(rate: number): string {
-  return rate.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+  return rate.toFixed(2);
 }
 
 function matchesApplicantSegment(productSegment: string | null | undefined, applicantSegment: string | null): boolean {
@@ -187,9 +184,9 @@ function formatMatchedRateLabel(product: ProductRow): string {
     ? `${fixedMonths % 12 === 0 ? `${fixedMonths / 12}yr` : `${fixedMonths}m`} fixed`
     : 'variable';
   const salaryTransferLabel = product.salary_transfer ? ' STL' : '';
-  const rate = toNullableNumber(product.rate) ?? 0;
+  const rate = normalizeRateToDecimal(toNullableNumber(product.rate)) ?? 0;
 
-  return `Rate: ${formatRateValue(rate)}% (${fixedLabel}${salaryTransferLabel})`;
+  return `Rate: ${formatRateValue(rate * 100)}% (${fixedLabel}${salaryTransferLabel})`;
 }
 
 function selectPreferredProduct(products: ProductRow[], context: ProductSelectionContext): ProductData | null {
@@ -204,7 +201,7 @@ function selectPreferredProduct(products: ProductRow[], context: ProductSelectio
     .map(product => ({
       ...product,
       fixedMonths: parseFixedPeriodMonths(product),
-      numericRate: normalizeRateToPercent(toNullableNumber(product.rate)),
+      numericRate: normalizeRateToDecimal(toNullableNumber(product.rate)),
       transactionPriority: getTransactionMatchPriority(product.transaction_type, context.preferredTransactionType),
     }))
     .filter(product => product.numericRate !== null);
