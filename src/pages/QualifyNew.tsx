@@ -39,13 +39,7 @@ interface Bank {
   max_loan_amount: number | null;
 }
 
-interface QualNote {
-  bank_id: string;
-  field_name: string;
-  official_value: string | null;
-  practical_value: string | null;
-  note_text: string;
-}
+// QualNote imported from BankEligibilityTable
 
 export default function QualifyNew() {
   const navigate = useNavigate();
