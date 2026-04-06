@@ -35,6 +35,7 @@ interface Props {
 interface BankCosts {
   bank: BankResult;
   usedRate: number;
+  displayRatePercent: number;
   rateLabel: string;
   rateSource: 'product' | 'manual';
   emi: number;
@@ -57,7 +58,7 @@ interface BankCosts {
 
 function calcEMI(loan: number, annualRate: number, months: number): number {
   if (!loan || !annualRate || !months) return 0;
-  const r = annualRate / 100 / 12;
+  const r = annualRate / 12;
   if (r === 0) return loan / months;
   return (loan * r * Math.pow(1 + r, months)) / (Math.pow(1 + r, months) - 1);
 }
@@ -84,13 +85,14 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
 
       // Rate: product rate if available, else manual fallback
       const rawRate = product?.rate ?? null;
-      const usedRate = rawRate !== null ? rawRate : nominalRate;
+      const usedRate = rawRate !== null ? rawRate : nominalRate / 100;
+      const displayRatePercent = usedRate * 100;
       const rateSource: 'product' | 'manual' = product?.rate != null ? 'product' : 'manual';
-      const rateLabel = product?.rate_label ?? `Rate: ${usedRate.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')}% (manual)`;
+      const rateLabel = product?.rate_label ?? `Rate: ${displayRatePercent.toFixed(2)}% (manual)`;
 
       // Defaults with product overrides
-      const lifeInsRate = product?.life_ins_monthly_percent != null ? product.life_ins_monthly_percent / 100 : 0.00018;
-      const propInsRate = product?.prop_ins_annual_percent != null ? product.prop_ins_annual_percent / 100 : 0.00035;
+      const lifeInsRate = product?.life_ins_monthly_percent ?? 0.00018;
+      const propInsRate = product?.prop_ins_annual_percent ?? 0.00035;
       const processingFeePercent = product?.processing_fee_percent ?? 1;
       const fixedMonths = product?.comparison_fixed_months ?? product?.fixed_period_months ?? 24;
       const valFee = product?.valuation_fee ?? defaultValFee;
@@ -113,7 +115,7 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
       const grandTotal = fixedPeriodTotal + upfrontExclDown;
 
       return {
-        bank: r, usedRate, rateLabel, rateSource, emi, lifeInsMonth, propInsMonth, totalMonthly,
+        bank: r, usedRate, displayRatePercent, rateLabel, rateSource, emi, lifeInsMonth, propInsMonth, totalMonthly,
         fixedMonths, fixedPeriodTotal, rank: 0,
         downPayment, dldFee, mortgageReg, transferCentre,
         processingFeePercent, processingFeeAED, valuationFee: valFee,
@@ -139,7 +141,7 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
     {
       label: 'Monthly EMI',
       getValue: c => `AED ${formatCurrency(c.emi)}`,
-      getSubLabel: c => `at ${c.usedRate.toFixed(2)}% — ${c.rateSource === 'product' ? 'Rate from product' : 'Rate from manual input'}`,
+      getSubLabel: c => `at ${c.displayRatePercent.toFixed(2)}% — ${c.rateSource === 'product' ? 'Rate from product' : 'Rate from manual input'}`,
     },
     { label: 'Life Insurance', getValue: c => `AED ${formatCurrency(c.lifeInsMonth)}` },
     { label: 'Property Insurance', getValue: c => `AED ${formatCurrency(c.propInsMonth)}` },
