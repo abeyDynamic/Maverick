@@ -86,6 +86,15 @@ function toNullableNumber(value: unknown): number | null {
   return null;
 }
 
+/** Convert rate to percentage if stored as decimal (e.g. 0.0399 → 3.99) */
+function normalizeRateToPercent(rate: number | null): number | null {
+  if (rate === null) return null;
+  // Rates stored as decimals (< 1) need to be multiplied by 100
+  // e.g. 0.0399 → 3.99%, 0.045 → 4.5%
+  // Rates already in percent form (e.g. 3.99, 4.5) are left as-is
+  return rate < 1 ? rate * 100 : rate;
+}
+
 function getApplicantSegment(employmentType: string): string | null {
   const normalized = normalizeMatchValue(employmentType);
   if (!normalized) return null;
@@ -195,7 +204,7 @@ function selectPreferredProduct(products: ProductRow[], context: ProductSelectio
     .map(product => ({
       ...product,
       fixedMonths: parseFixedPeriodMonths(product),
-      numericRate: toNullableNumber(product.rate),
+      numericRate: normalizeRateToPercent(toNullableNumber(product.rate)),
       transactionPriority: getTransactionMatchPriority(product.transaction_type, context.preferredTransactionType),
     }))
     .filter(product => product.numericRate !== null);
