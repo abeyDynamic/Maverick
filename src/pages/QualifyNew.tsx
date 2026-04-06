@@ -582,6 +582,12 @@ export default function QualifyNew() {
               <p className="text-sm font-semibold text-primary">{clientName}</p>
             )}
 
+            {/* Session Reminders — global notes above DBR bar */}
+            <SessionRemindersPanel
+              notes={qualNotes.filter(n => !n.bank_id)}
+              warningsOnly={false}
+            />
+
             {/* Pinned DBR Summary */}
             <div className="sticky top-0 z-10">
               <DBRSummaryBar
