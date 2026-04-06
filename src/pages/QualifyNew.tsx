@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { QualNote } from '@/components/results/BankEligibilityTable';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -38,13 +39,7 @@ interface Bank {
   max_loan_amount: number | null;
 }
 
-interface QualNote {
-  bank_id: string;
-  field_name: string;
-  official_value: string | null;
-  practical_value: string | null;
-  note_text: string;
-}
+// QualNote imported from BankEligibilityTable
 
 export default function QualifyNew() {
   const navigate = useNavigate();
@@ -606,6 +601,8 @@ export default function QualifyNew() {
               loanAmount={loanAmount}
               tenorMonths={effectiveTenor}
               stressRate={stressRate}
+              employmentType={empType}
+              residencyStatus={residency}
             />
 
             {/* Cost Breakdown */}
