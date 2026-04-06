@@ -14,6 +14,10 @@ export interface ProductData {
   valuation_fee: number | null;
   life_ins_monthly_percent: number | null;
   prop_ins_annual_percent: number | null;
+  follow_on_margin: number | null;
+  eibor_benchmark: number | null;
+  salary_transfer: boolean;
+  fixed_period: string | null;
 }
 
 interface Props {
