@@ -446,6 +446,16 @@ export default function QualifyNew() {
                     </Select>
                   </div>
                   <div>
+                    <Label className="text-xs text-muted-foreground">Salary Transfer</Label>
+                    <Select value={salaryTransfer ? 'yes' : 'no'} onValueChange={v => setSalaryTransfer(v === 'yes')}>
+                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yes">Yes</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
                     <Label className="text-xs text-muted-foreground">Property Type</Label>
                     <Select value={propertyType} onValueChange={setPropertyType}>
                       <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
