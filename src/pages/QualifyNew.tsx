@@ -92,12 +92,22 @@ export default function QualifyNew() {
   // Fetch products matching current transaction type + salary transfer, with fixed_period priority
   useEffect(() => {
     async function loadProducts() {
-      const { data } = await supabase
+      // Map employment type to product segment
+      const segment = empType === 'self_employed' ? 'self_employed' : 'salaried';
+
+      let query = supabase
         .from('products')
         .select('bank_id, rate, fixed_period_months, fixed_period, processing_fee_percent, valuation_fee, life_ins_monthly_percent, prop_ins_annual_percent, follow_on_margin, eibor_benchmark, salary_transfer')
         .eq('active', true)
         .eq('transaction_type', txnType)
-        .eq('salary_transfer', salaryTransfer) as any;
+        .eq('salary_transfer', salaryTransfer);
+
+      // Filter by segment if employment type is set
+      if (empType) {
+        query = query.eq('segment', segment);
+      }
+
+      const { data } = await query as any;
 
       // Priority: 2yr > 3yr > variable
       const PRIORITY: Record<string, number> = { '2yr': 0, '3yr': 1, 'variable': 2 };
@@ -113,7 +123,7 @@ export default function QualifyNew() {
       setProductsByBank(map);
     }
     loadProducts();
-  }, [txnType, salaryTransfer]);
+  }, [txnType, salaryTransfer, empType]);
 
   // Section 3 — Income
   const [selectedIncomeTypes, setSelectedIncomeTypes] = useState<string[]>([]);

@@ -146,30 +146,24 @@ export function SessionRemindersPanel({ notes, warningsOnly }: { notes: QualNote
   );
 }
 
-/* ── Bank Note Card (reformatted) ── */
+/* ── Bank Note Card (3-line format) ── */
 function BankNoteCard({ note }: { note: QualNote }) {
-  const [expanded, setExpanded] = useState(false);
   const category = getNoteCategory(note);
   const hasDetails = !!(note.official_value || note.practical_value);
 
   return (
-    <div
-      className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/15 border border-amber-200/60 dark:border-amber-800/40 rounded text-[11px] cursor-pointer hover:bg-amber-100/80 dark:hover:bg-amber-950/25 transition-colors"
-      onClick={() => setExpanded(!expanded)}
-    >
+    <div className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/15 border border-amber-200/60 dark:border-amber-800/40 rounded text-[11px]">
       <div className="flex items-start gap-1.5">
         <NoteCategoryIcon category={category} />
         <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
-            <span className="font-bold text-amber-700 dark:text-amber-400">{note.field_name}</span>
-            {!expanded && note.note_text && (
-              <span className="text-muted-foreground truncate">{note.note_text}</span>
-            )}
-          </div>
-          {expanded && note.note_text && (
-            <p className="mt-1 text-foreground leading-relaxed">{note.note_text}</p>
+          {/* Line 1: field name */}
+          <div className="font-bold text-amber-700 dark:text-amber-400">{note.field_name}</div>
+          {/* Line 2: note text */}
+          {note.note_text && (
+            <p className="mt-0.5 text-foreground leading-relaxed">{note.note_text}</p>
           )}
-          {expanded && hasDetails && (
+          {/* Line 3: official | practical */}
+          {hasDetails && (
             <p className="mt-0.5 text-[10px] text-muted-foreground">
               {note.official_value && <span>Official: {note.official_value}</span>}
               {note.official_value && note.practical_value && <span> | </span>}
