@@ -83,7 +83,8 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
       const product = productsByBank[r.bank.id];
 
       // Rate: product rate if available, else manual fallback
-      const usedRate = product?.rate ?? nominalRate;
+      const rawRate = product?.rate ?? null;
+      const usedRate = rawRate !== null ? rawRate : nominalRate;
       const rateSource: 'product' | 'manual' = product?.rate != null ? 'product' : 'manual';
       const rateLabel = product?.rate_label ?? `Rate: ${usedRate.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')}% (manual)`;
 
