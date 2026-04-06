@@ -85,6 +85,7 @@ export default function QualifyNew() {
   const [isDIFC, setIsDIFC] = useState(false);
   const [isAlAin, setIsAlAin] = useState(false);
   const [txnType, setTxnType] = useState('resale');
+  const [salaryTransfer, setSalaryTransfer] = useState(true);
   const [propertyType, setPropertyType] = useState('');
   const [purpose, setPurpose] = useState('');
   const [loanTypePref, setLoanTypePref] = useState('best');
