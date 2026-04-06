@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { QualNote } from '@/components/results/BankEligibilityTable';
+import { SessionRemindersPanel } from '@/components/results/BankEligibilityTable';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -580,6 +581,12 @@ export default function QualifyNew() {
             {clientName && (
               <p className="text-sm font-semibold text-primary">{clientName}</p>
             )}
+
+            {/* Session Reminders — global notes above DBR bar */}
+            <SessionRemindersPanel
+              notes={qualNotes.filter(n => !n.bank_id)}
+              warningsOnly={false}
+            />
 
             {/* Pinned DBR Summary */}
             <div className="sticky top-0 z-10">

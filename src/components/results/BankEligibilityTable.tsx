@@ -2,7 +2,7 @@ import { useMemo, Fragment, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CheckCircle2, XCircle, Info, ChevronDown, ChevronRight } from 'lucide-react';
+import { CheckCircle2, XCircle, Info, ChevronDown, ChevronRight, AlertTriangle, CircleCheck } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Switch } from '@/components/ui/switch';
@@ -43,9 +43,38 @@ export interface BankResult {
 }
 
 const WARNING_KEYWORDS = /restrict|not accepted|excluded|difficult|required|cannot|must not|check/i;
+const WARNING_FIELD_KEYWORDS = /restriction|excluded|required|cannot|difficult|desell|warning/i;
+const USP_FIELD_KEYWORDS = /usp|upsell|insurance free|processing fee stl/i;
 
 function isWarningNote(note: QualNote): boolean {
   return WARNING_KEYWORDS.test(note.note_text || '');
+}
+
+function isWarningByField(note: QualNote): boolean {
+  return WARNING_FIELD_KEYWORDS.test(note.field_name || '');
+}
+
+function isUSPByField(note: QualNote): boolean {
+  return USP_FIELD_KEYWORDS.test(note.field_name || '');
+}
+
+type NoteCategory = 'warning' | 'usp' | 'info';
+
+function getNoteCategory(note: QualNote): NoteCategory {
+  if (isWarningByField(note)) return 'warning';
+  if (isUSPByField(note)) return 'usp';
+  return 'info';
+}
+
+function NoteCategoryIcon({ category }: { category: NoteCategory }) {
+  switch (category) {
+    case 'warning':
+      return <AlertTriangle className="h-3 w-3 text-amber-600 mt-0.5 shrink-0" />;
+    case 'usp':
+      return <CircleCheck className="h-3 w-3 text-green-600 mt-0.5 shrink-0" />;
+    case 'info':
+      return <Info className="h-3 w-3 text-blue-500 mt-0.5 shrink-0" />;
+  }
 }
 
 function formatDbrLimit(val: number): string {
@@ -79,16 +108,78 @@ function filterNotesBySegment(
   });
 }
 
-interface Props {
-  banks: Bank[];
-  qualNotes: QualNote[];
-  totalIncome: number;
-  totalLiabilities: number;
-  loanAmount: number;
-  tenorMonths: number;
-  stressRate: number;
-  employmentType?: string;
-  residencyStatus?: string;
+/* ── Session Reminders Panel (global notes, bank_id IS NULL) ── */
+export function SessionRemindersPanel({ notes, warningsOnly }: { notes: QualNote[]; warningsOnly: boolean }) {
+  const [open, setOpen] = useState(false);
+  const filtered = warningsOnly ? notes.filter(isWarningNote) : notes;
+
+  if (filtered.length === 0) return null;
+
+  const firstTitle = filtered[0]?.field_name || 'Reminders available';
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger className="flex items-center gap-2 w-full px-4 py-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-950/30 transition-colors">
+        {open ? <ChevronDown className="h-3.5 w-3.5 text-amber-600" /> : <ChevronRight className="h-3.5 w-3.5 text-amber-600" />}
+        <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">Session Reminders</span>
+        <Badge className="bg-amber-500 text-white text-[10px] px-1.5 py-0 ml-1">{filtered.length}</Badge>
+        {!open && (
+          <span className="text-[11px] text-muted-foreground truncate ml-2">{firstTitle}</span>
+        )}
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-1 space-y-1 px-1">
+          {filtered.map((note, i) => (
+            <div key={i} className="flex items-start gap-2 px-3 py-1.5 text-[11px] bg-amber-50/60 dark:bg-amber-950/10 rounded">
+              <NoteCategoryIcon category={getNoteCategory(note)} />
+              <div>
+                <span className="font-semibold text-amber-700 dark:text-amber-400">{note.field_name}</span>
+                {note.practical_value && (
+                  <span className="ml-1 text-amber-600 dark:text-amber-500">— {note.practical_value}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+/* ── Bank Note Card (reformatted) ── */
+function BankNoteCard({ note }: { note: QualNote }) {
+  const [expanded, setExpanded] = useState(false);
+  const category = getNoteCategory(note);
+  const hasDetails = !!(note.official_value || note.practical_value);
+
+  return (
+    <div
+      className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/15 border border-amber-200/60 dark:border-amber-800/40 rounded text-[11px] cursor-pointer hover:bg-amber-100/80 dark:hover:bg-amber-950/25 transition-colors"
+      onClick={() => setExpanded(!expanded)}
+    >
+      <div className="flex items-start gap-1.5">
+        <NoteCategoryIcon category={category} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <span className="font-bold text-amber-700 dark:text-amber-400">{note.field_name}</span>
+            {!expanded && note.note_text && (
+              <span className="text-muted-foreground truncate">{note.note_text}</span>
+            )}
+          </div>
+          {expanded && note.note_text && (
+            <p className="mt-1 text-foreground leading-relaxed">{note.note_text}</p>
+          )}
+          {expanded && hasDetails && (
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              {note.official_value && <span>Official: {note.official_value}</span>}
+              {note.official_value && note.practical_value && <span> | </span>}
+              {note.practical_value && <span>Practical: {note.practical_value}</span>}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function useBankResults(
@@ -168,96 +259,50 @@ export function buildWhatIfAnalysis(
   return lines.join('\n');
 }
 
-/* ── Adviser Reminders Panel ── */
-function AdviserRemindersPanel({ notes, warningsOnly }: { notes: QualNote[]; warningsOnly: boolean }) {
-  const [open, setOpen] = useState(false);
-  const filtered = warningsOnly ? notes.filter(isWarningNote) : notes;
-
-  if (filtered.length === 0) return null;
-
-  return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger className="flex items-center gap-2 w-full px-4 py-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-950/30 transition-colors">
-        {open ? <ChevronDown className="h-3.5 w-3.5 text-amber-600" /> : <ChevronRight className="h-3.5 w-3.5 text-amber-600" />}
-        <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">Adviser Reminders</span>
-        <Badge className="bg-amber-500 text-white text-[10px] px-1.5 py-0 ml-auto">{filtered.length}</Badge>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="mt-1 space-y-1 px-1">
-          {filtered.map((note, i) => (
-            <div key={i} className="flex items-start gap-2 px-3 py-1.5 text-[11px] bg-amber-50/60 dark:bg-amber-950/10 rounded">
-              <Info className="h-3 w-3 text-amber-600 mt-0.5 shrink-0" />
-              <div>
-                <span className="font-semibold text-amber-700 dark:text-amber-400">{note.field_name}</span>
-                {note.practical_value && (
-                  <span className="ml-1 text-amber-600 dark:text-amber-500">— {note.practical_value}</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
-/* ── Bank Note Card ── */
-function BankNoteCard({ note }: { note: QualNote }) {
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <div
-      className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/15 border border-amber-200/60 dark:border-amber-800/40 rounded text-[11px] cursor-pointer hover:bg-amber-100/80 dark:hover:bg-amber-950/25 transition-colors"
-      onClick={() => setExpanded(!expanded)}
-    >
-      <div className="flex items-start gap-1.5">
-        <Info className="h-3 w-3 text-amber-600 mt-0.5 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <span className="font-bold text-foreground">{note.field_name}</span>
-          {note.official_value && (
-            <span className="ml-2 text-muted-foreground">Official: {note.official_value}</span>
-          )}
-          {note.practical_value && (
-            <span className="ml-2 text-amber-600 dark:text-amber-400 font-medium">Practical: {note.practical_value}</span>
-          )}
-          {expanded && note.note_text && (
-            <p className="mt-1 text-muted-foreground leading-relaxed">{note.note_text}</p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+interface Props {
+  banks: Bank[];
+  qualNotes: QualNote[];
+  totalIncome: number;
+  totalLiabilities: number;
+  loanAmount: number;
+  tenorMonths: number;
+  stressRate: number;
+  employmentType?: string;
+  residencyStatus?: string;
 }
 
 export default function BankEligibilityTable({ banks, qualNotes, totalIncome, totalLiabilities, loanAmount, tenorMonths, stressRate, employmentType = '', residencyStatus = '' }: Props) {
   const bankResults = useBankResults(banks, totalIncome, totalLiabilities, loanAmount, tenorMonths, stressRate);
   const [warningsOnly, setWarningsOnly] = useState(false);
+  const [expandedBanks, setExpandedBanks] = useState<Record<string, boolean>>({});
 
-  // Split notes: global (bank_id IS NULL) vs bank-specific
-  const { globalNotes, notesByBank } = useMemo(() => {
-    const global: QualNote[] = [];
+  const toggleBank = (bankId: string) => {
+    setExpandedBanks(prev => ({ ...prev, [bankId]: !prev[bankId] }));
+  };
+
+  // Split notes: bank-specific only (global notes handled externally now)
+  const notesByBank = useMemo(() => {
     const byBank: Record<string, QualNote[]> = {};
-
     const segmentFiltered = filterNotesBySegment(qualNotes, employmentType, residencyStatus);
 
     for (const n of segmentFiltered) {
-      if (!n.bank_id) {
-        global.push(n);
-      } else {
+      if (n.bank_id) {
         if (!byBank[n.bank_id]) byBank[n.bank_id] = [];
         byBank[n.bank_id].push(n);
       }
     }
-    return { globalNotes: global, notesByBank: byBank };
+    return byBank;
   }, [qualNotes, employmentType, residencyStatus]);
 
-  // Count notes per bank (after warning filter)
-  const noteCountByBank = useMemo(() => {
-    const counts: Record<string, number> = {};
+  // Count & badge color per bank
+  const bankNoteMeta = useMemo(() => {
+    const meta: Record<string, { count: number; hasWarning: boolean }> = {};
     for (const [bankId, notes] of Object.entries(notesByBank)) {
-      counts[bankId] = warningsOnly ? notes.filter(isWarningNote).length : notes.length;
+      const filtered = warningsOnly ? notes.filter(isWarningNote) : notes;
+      const hasWarning = filtered.some(isWarningByField);
+      meta[bankId] = { count: filtered.length, hasWarning };
     }
-    return counts;
+    return meta;
   }, [notesByBank, warningsOnly]);
 
   if (bankResults.length === 0) {
@@ -272,113 +317,124 @@ export default function BankEligibilityTable({ banks, qualNotes, totalIncome, to
 
   return (
     <TooltipProvider>
-      <div className="space-y-2">
-        {/* Adviser Reminders — collapsible, above table */}
-        <AdviserRemindersPanel notes={globalNotes} warningsOnly={warningsOnly} />
+      <Card className="bg-background">
+        <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+          <CardTitle className="text-sm font-semibold text-primary">Bank Eligibility</CardTitle>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="warnings-toggle" className="text-[10px] text-muted-foreground cursor-pointer">
+              {warningsOnly ? 'Warnings only' : 'All notes'}
+            </Label>
+            <Switch
+              id="warnings-toggle"
+              checked={warningsOnly}
+              onCheckedChange={setWarningsOnly}
+              className="scale-75"
+            />
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-xs w-1">{ }</TableHead>
+                <TableHead className="text-xs">Bank</TableHead>
+                <TableHead className="text-xs text-right">Stress %</TableHead>
+                <TableHead className="text-xs text-right">EMI</TableHead>
+                <TableHead className="text-xs text-right">DBR %</TableHead>
+                <TableHead className="text-xs text-center">Min Salary</TableHead>
+                <TableHead className="text-xs text-center">Eligible</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {bankResults.map(r => {
+                const rowBg = r.eligible
+                  ? 'bg-green-50 dark:bg-green-950/20'
+                  : 'bg-red-50 dark:bg-red-950/20';
+                const borderColor = r.eligible ? 'border-l-green-500' : 'border-l-red-500';
+                const bankNotes = notesByBank[r.bank.id] ?? [];
+                const displayNotes = warningsOnly ? bankNotes.filter(isWarningNote) : bankNotes;
+                const meta = bankNoteMeta[r.bank.id];
+                const noteCount = meta?.count ?? 0;
+                const isExpanded = expandedBanks[r.bank.id] ?? false;
 
-        <Card className="bg-background">
-          <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-semibold text-primary">Bank Eligibility</CardTitle>
-            {/* Warnings filter toggle */}
-            <div className="flex items-center gap-2">
-              <Label htmlFor="warnings-toggle" className="text-[10px] text-muted-foreground cursor-pointer">
-                {warningsOnly ? 'Warnings only' : 'All notes'}
-              </Label>
-              <Switch
-                id="warnings-toggle"
-                checked={warningsOnly}
-                onCheckedChange={setWarningsOnly}
-                className="scale-75"
-              />
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs w-1">{ }</TableHead>
-                  <TableHead className="text-xs">Bank</TableHead>
-                  <TableHead className="text-xs text-right">Stress %</TableHead>
-                  <TableHead className="text-xs text-right">EMI</TableHead>
-                  <TableHead className="text-xs text-right">DBR %</TableHead>
-                  <TableHead className="text-xs text-center">Min Salary</TableHead>
-                  <TableHead className="text-xs text-center">Eligible</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {bankResults.map(r => {
-                  const rowBg = r.eligible
-                    ? 'bg-green-50 dark:bg-green-950/20'
-                    : 'bg-red-50 dark:bg-red-950/20';
-                  const borderColor = r.eligible ? 'border-l-green-500' : 'border-l-red-500';
-                  const bankNotes = notesByBank[r.bank.id] ?? [];
-                  const displayNotes = warningsOnly ? bankNotes.filter(isWarningNote) : bankNotes;
-                  const noteCount = noteCountByBank[r.bank.id] ?? 0;
-
-                  return (
-                    <Fragment key={r.bank.id}>
-                      <TableRow className={rowBg}>
-                        <TableCell className={cn('w-1 p-0 border-l-4', borderColor)} />
-                        <TableCell className="font-medium text-xs py-2">
+                return (
+                  <Fragment key={r.bank.id}>
+                    <TableRow
+                      className={cn(rowBg, noteCount > 0 && 'cursor-pointer')}
+                      onClick={() => noteCount > 0 && toggleBank(r.bank.id)}
+                    >
+                      <TableCell className={cn('w-1 p-0 border-l-4', borderColor)} />
+                      <TableCell className="font-medium text-xs py-2">
+                        <div className="flex items-center gap-1.5">
+                          {noteCount > 0 && (
+                            isExpanded
+                              ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+                              : <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                          )}
                           <span>{r.bank.bank_name}</span>
                           {noteCount > 0 && (
-                            <Badge className="ml-1.5 bg-amber-500 text-white text-[9px] px-1 py-0 leading-tight">{noteCount}</Badge>
+                            <Badge className={cn(
+                              'text-white text-[9px] px-1 py-0 leading-tight',
+                              meta?.hasWarning ? 'bg-amber-500' : 'bg-green-500'
+                            )}>
+                              {noteCount}
+                            </Badge>
                           )}
-                        </TableCell>
-                        <TableCell className="text-right text-xs py-2">{r.stressRate.toFixed(2)}%</TableCell>
-                        <TableCell className="text-right text-xs py-2">AED {formatCurrency(Math.round(r.stressEMI))}</TableCell>
-                        <TableCell className="text-right text-xs py-2">
-                          <span className={cn(
-                            'font-semibold',
-                            r.dbr <= 42 ? 'text-green-600' : r.dbr <= 50 ? 'text-amber-600' : 'text-red-600'
-                          )}>
-                            {r.dbr.toFixed(1)}%
-                          </span>
-                          <span className="text-muted-foreground text-[10px] ml-1">/ {formatDbrLimit(r.dbrLimit)}%</span>
-                        </TableCell>
-                        <TableCell className="text-center py-2">
-                          {r.minSalaryMet
-                            ? <CheckCircle2 className="inline h-3.5 w-3.5 text-green-600" />
-                            : <XCircle className="inline h-3.5 w-3.5 text-red-600" />}
-                        </TableCell>
-                        <TableCell className="text-center py-2">
-                          {r.eligible ? (
-                            <Badge className="bg-green-600 text-white hover:bg-green-700 text-[10px] px-1.5 py-0">Approved</Badge>
-                          ) : (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Badge variant="destructive" className="text-[10px] px-1.5 py-0 cursor-help">Not Qualified</Badge>
-                              </TooltipTrigger>
-                              <TooltipContent side="left" className="max-w-xs text-xs">
-                                {getDeclineReasons(r, totalIncome).map((reason, i) => (
-                                  <p key={i}>{reason}</p>
-                                ))}
-                              </TooltipContent>
-                            </Tooltip>
-                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right text-xs py-2">{r.stressRate.toFixed(2)}%</TableCell>
+                      <TableCell className="text-right text-xs py-2">AED {formatCurrency(Math.round(r.stressEMI))}</TableCell>
+                      <TableCell className="text-right text-xs py-2">
+                        <span className={cn(
+                          'font-semibold',
+                          r.dbr <= 42 ? 'text-green-600' : r.dbr <= 50 ? 'text-amber-600' : 'text-red-600'
+                        )}>
+                          {r.dbr.toFixed(1)}%
+                        </span>
+                        <span className="text-muted-foreground text-[10px] ml-1">/ {formatDbrLimit(r.dbrLimit)}%</span>
+                      </TableCell>
+                      <TableCell className="text-center py-2">
+                        {r.minSalaryMet
+                          ? <CheckCircle2 className="inline h-3.5 w-3.5 text-green-600" />
+                          : <XCircle className="inline h-3.5 w-3.5 text-red-600" />}
+                      </TableCell>
+                      <TableCell className="text-center py-2">
+                        {r.eligible ? (
+                          <Badge className="bg-green-600 text-white hover:bg-green-700 text-[10px] px-1.5 py-0">Approved</Badge>
+                        ) : (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0 cursor-help">Not Qualified</Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="left" className="max-w-xs text-xs">
+                              {getDeclineReasons(r, totalIncome).map((reason, i) => (
+                                <p key={i}>{reason}</p>
+                              ))}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                    {/* Bank-specific notes — collapsed by default */}
+                    {isExpanded && displayNotes.length > 0 && (
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell className="p-0" />
+                        <TableCell colSpan={6} className="py-1.5 px-2">
+                          <div className="space-y-1">
+                            {displayNotes.map((note, i) => (
+                              <BankNoteCard key={`${r.bank.id}-${note.field_name}-${i}`} note={note} />
+                            ))}
+                          </div>
                         </TableCell>
                       </TableRow>
-                      {/* Bank-specific qualification notes as amber cards */}
-                      {displayNotes.length > 0 && (
-                        <TableRow className="hover:bg-transparent">
-                          <TableCell className="p-0" />
-                          <TableCell colSpan={6} className="py-1.5 px-2">
-                            <div className="space-y-1">
-                              {displayNotes.map((note, i) => (
-                                <BankNoteCard key={`${r.bank.id}-${note.field_name}-${i}`} note={note} />
-                              ))}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </TooltipProvider>
   );
 }
