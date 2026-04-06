@@ -55,11 +55,12 @@ interface LiabilityField {
 }
 
 interface QualNote {
-  bank_id: string;
+  bank_id: string | null;
   field_name: string;
   official_value: string | null;
   practical_value: string | null;
   note_text: string;
+  segment: string | null;
 }
 
 interface BankResult {
