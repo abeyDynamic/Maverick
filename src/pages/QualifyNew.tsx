@@ -93,22 +93,31 @@ export default function QualifyNew() {
   const [nominalRate, setNominalRate] = useState(4.5);
   const [stressRate, setStressRate] = useState(7.5);
 
-  // Fetch products matching current transaction type
+  // Fetch products matching current transaction type + salary transfer, with fixed_period priority
   useEffect(() => {
     async function loadProducts() {
       const { data } = await supabase
         .from('products')
-        .select('bank_id, rate, fixed_period_months, processing_fee_percent, valuation_fee, life_ins_monthly_percent, prop_ins_annual_percent')
+        .select('bank_id, rate, fixed_period_months, fixed_period, processing_fee_percent, valuation_fee, life_ins_monthly_percent, prop_ins_annual_percent, follow_on_margin, eibor_benchmark, salary_transfer')
         .eq('active', true)
-        .eq('transaction_type', txnType) as any;
+        .eq('transaction_type', txnType)
+        .eq('salary_transfer', salaryTransfer) as any;
+
+      // Priority: 2yr > 3yr > variable
+      const PRIORITY: Record<string, number> = { '2yr': 0, '3yr': 1, 'variable': 2 };
       const map: Record<string, ProductData> = {};
       for (const p of (data ?? [])) {
-        if (!map[p.bank_id]) map[p.bank_id] = p;
+        const existing = map[p.bank_id];
+        const pPriority = PRIORITY[p.fixed_period] ?? 99;
+        const existingPriority = existing ? (PRIORITY[existing.fixed_period ?? ''] ?? 99) : 999;
+        if (pPriority < existingPriority) {
+          map[p.bank_id] = p;
+        }
       }
       setProductsByBank(map);
     }
     loadProducts();
-  }, [txnType]);
+  }, [txnType, salaryTransfer]);
 
   // Section 3 — Income
   const [selectedIncomeTypes, setSelectedIncomeTypes] = useState<string[]>([]);
