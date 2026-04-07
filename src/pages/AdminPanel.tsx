@@ -19,15 +19,16 @@ export default function AdminPanel() {
         </div>
       </header>
       <main className="container mx-auto px-6 py-8">
-        <Tabs defaultValue="banks">
+        <Tabs defaultValue="eibor">
           <TabsList className="mb-6">
             <TabsTrigger value="banks">Banks</TabsTrigger>
             <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="eibor">EIBOR Rates</TabsTrigger>
-            <TabsTrigger value="fees">Emirate Fees</TabsTrigger>
+            <TabsTrigger value="notes">Qualification Notes</TabsTrigger>
+            <TabsTrigger value="version">Version Log</TabsTrigger>
           </TabsList>
           <TabsContent value="banks">
-            <Card className="bg-background"><CardHeader><CardTitle>Bank Management</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Bank management coming soon. Run the SQL migration first.</p></CardContent></Card>
+            <Card className="bg-background"><CardHeader><CardTitle>Bank Management</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Bank management coming soon.</p></CardContent></Card>
           </TabsContent>
           <TabsContent value="products">
             <Card className="bg-background"><CardHeader><CardTitle>Product Management</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Product management coming soon.</p></CardContent></Card>
@@ -35,8 +36,11 @@ export default function AdminPanel() {
           <TabsContent value="eibor">
             <EiborManagement />
           </TabsContent>
-          <TabsContent value="fees">
-            <Card className="bg-background"><CardHeader><CardTitle>Emirate Fees</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Fee management coming soon.</p></CardContent></Card>
+          <TabsContent value="notes">
+            <Card className="bg-background"><CardHeader><CardTitle>Qualification Notes</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Qualification notes management coming soon.</p></CardContent></Card>
+          </TabsContent>
+          <TabsContent value="version">
+            <Card className="bg-background"><CardHeader><CardTitle>Version Log</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Version log coming soon.</p></CardContent></Card>
           </TabsContent>
         </Tabs>
       </main>

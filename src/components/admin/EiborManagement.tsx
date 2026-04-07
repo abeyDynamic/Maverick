@@ -16,12 +16,12 @@ import {
 } from 'recharts';
 
 const TENORS = [
-  { key: 'overnight', label: 'Overnight', color: 'hsl(25, 95%, 53%)' },
-  { key: 'one_week', label: '1 Week', color: 'hsl(185, 80%, 50%)' },
-  { key: 'one_month', label: '1 Month', color: 'hsl(220, 80%, 55%)' },
-  { key: 'three_months', label: '3 Months', color: 'hsl(140, 65%, 42%)' },
-  { key: 'six_months', label: '6 Months', color: 'hsl(270, 60%, 55%)' },
-  { key: 'one_year', label: '1 Year', color: 'hsl(220, 50%, 25%)' },
+  { key: 'overnight', label: 'Overnight', shortLabel: 'O/N', color: '#F97316' },
+  { key: 'one_week', label: '1 Week', shortLabel: '1W', color: '#06B6D4' },
+  { key: 'one_month', label: '1 Month', shortLabel: '1M', color: '#3B82F6' },
+  { key: 'three_months', label: '3 Months', shortLabel: '3M', color: '#22C55E' },
+  { key: 'six_months', label: '6 Months', shortLabel: '6M', color: '#A855F7' },
+  { key: 'one_year', label: '1 Year', shortLabel: '1Y', color: '#0A1F44' },
 ] as const;
 
 type TenorKey = typeof TENORS[number]['key'];
@@ -46,9 +46,14 @@ interface HistoryRow {
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
+  // Find the fixing_date from the first payload entry
+  const fixingDate = payload[0]?.payload?.fixing_date;
+  const dateDisplay = fixingDate
+    ? format(parseISO(fixingDate), 'dd/MM/yyyy')
+    : label;
   return (
     <div className="rounded-lg border bg-background p-3 shadow-lg text-xs">
-      <p className="font-semibold mb-1.5">{label}</p>
+      <p className="font-semibold mb-1.5">{dateDisplay}</p>
       {TENORS.map(t => {
         const entry = payload.find((p: any) => p.dataKey === t.key);
         return (
@@ -68,12 +73,11 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function EiborManagement() {
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [range, setRange] = useState(6); // months, 0 = all
+  const [range, setRange] = useState(6);
   const [visibleLines, setVisibleLines] = useState<Record<TenorKey, boolean>>(
     Object.fromEntries(TENORS.map(t => [t.key, true])) as Record<TenorKey, boolean>
   );
 
-  // Form state
   const [formDate, setFormDate] = useState<Date>(new Date());
   const [formValues, setFormValues] = useState<Record<TenorKey, string>>(
     Object.fromEntries(TENORS.map(t => [t.key, ''])) as Record<TenorKey, string>
@@ -90,14 +94,26 @@ export default function EiborManagement() {
       console.error('Failed to load EIBOR history:', error);
       toast.error('Failed to load EIBOR history');
     } else {
-      setHistory((data as HistoryRow[]) || []);
+      const rows = (data as HistoryRow[]) || [];
+      setHistory(rows);
+      // Pre-populate form with latest row
+      if (rows.length > 0) {
+        const latest = rows[rows.length - 1];
+        setFormValues({
+          overnight: latest.overnight != null ? String(latest.overnight) : '',
+          one_week: latest.one_week != null ? String(latest.one_week) : '',
+          one_month: latest.one_month != null ? String(latest.one_month) : '',
+          three_months: latest.three_months != null ? String(latest.three_months) : '',
+          six_months: latest.six_months != null ? String(latest.six_months) : '',
+          one_year: latest.one_year != null ? String(latest.one_year) : '',
+        });
+      }
     }
     setLoading(false);
   }, []);
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
-  // Filtered chart data
   const chartData = useMemo(() => {
     if (!history.length) return [];
     const cutoff = range > 0
@@ -110,7 +126,6 @@ export default function EiborManagement() {
     }));
   }, [history, range]);
 
-  // Latest rates
   const latestRow = history.length ? history[history.length - 1] : null;
 
   const toggleLine = (key: TenorKey) => {
@@ -125,14 +140,12 @@ export default function EiborManagement() {
       row[t.key] = val ? parseFloat(val) : null;
     }
 
-    // Validate at least one value
     if (TENORS.every(t => row[t.key] == null)) {
       toast.error('Enter at least one rate');
       return;
     }
 
     setSaving(true);
-    // Upsert into eibor_history
     const { error } = await supabase
       .from('eibor_history')
       .upsert(row, { onConflict: 'fixing_date' });
@@ -144,7 +157,7 @@ export default function EiborManagement() {
       return;
     }
 
-    // Update eibor_rates table with 1m, 3m, 6m for stress calculations
+    // Update eibor_rates with 1m, 3m, 6m for stress calculations
     const rateUpdates = [
       { type: '1m', value: row.one_month },
       { type: '3m', value: row.three_months },
@@ -160,14 +173,14 @@ export default function EiborManagement() {
         );
     }
 
-    toast.success('EIBOR rates saved');
+    toast.success('EIBOR rates updated');
     setSaving(false);
     await fetchHistory();
   };
 
   return (
     <div className="space-y-6">
-      {/* Chart */}
+      {/* SECTION 1 — Interactive Chart */}
       <Card className="bg-background">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -189,20 +202,25 @@ export default function EiborManagement() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="h-[350px] flex items-center justify-center text-muted-foreground">Loading…</div>
+            <div className="h-[320px] flex items-center justify-center text-muted-foreground">Loading…</div>
           ) : chartData.length === 0 ? (
-            <div className="h-[350px] flex items-center justify-center text-muted-foreground">
+            <div className="h-[320px] flex items-center justify-center text-muted-foreground">
               No EIBOR history data. Add rates below to get started.
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={350}>
+            <ResponsiveContainer width="100%" height={320}>
               <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
-                <XAxis dataKey="dateLabel" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                <XAxis
+                  dataKey="dateLabel"
+                  tick={{ fontSize: 11 }}
+                  className="fill-muted-foreground"
+                  interval={Math.max(0, Math.floor(chartData.length / 10) - 1)}
+                />
                 <YAxis
                   tick={{ fontSize: 11 }}
                   className="fill-muted-foreground"
-                  tickFormatter={(v: number) => `${v}%`}
+                  tickFormatter={(v: number) => `${v.toFixed(2)}%`}
                   domain={['auto', 'auto']}
                 />
                 <RechartsTooltip content={<CustomTooltip />} />
@@ -210,7 +228,10 @@ export default function EiborManagement() {
                   onClick={(e: any) => toggleLine(e.dataKey as TenorKey)}
                   wrapperStyle={{ cursor: 'pointer' }}
                   formatter={(value: string, entry: any) => (
-                    <span style={{ color: visibleLines[entry.dataKey as TenorKey] ? entry.color : '#999', textDecoration: visibleLines[entry.dataKey as TenorKey] ? 'none' : 'line-through' }}>
+                    <span style={{
+                      color: visibleLines[entry.dataKey as TenorKey] ? entry.color : '#999',
+                      textDecoration: visibleLines[entry.dataKey as TenorKey] ? 'none' : 'line-through',
+                    }}>
                       {value}
                     </span>
                   )}
@@ -234,18 +255,18 @@ export default function EiborManagement() {
         </CardContent>
       </Card>
 
-      {/* Current Rates Summary */}
+      {/* SECTION 2 — Current Rates Summary Bar */}
       {latestRow && (
         <Card className="bg-background">
           <CardContent className="pt-6">
-            <p className="text-xs text-muted-foreground mb-3">
-              Current Rates — Fixing Date: {format(parseISO(latestRow.fixing_date), 'dd MMM yyyy')}
+            <p className="text-sm font-bold mb-3">
+              Latest fixing: {format(parseISO(latestRow.fixing_date), 'dd MMM yyyy')}
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
               {TENORS.map(t => (
-                <div key={t.key} className="text-center">
-                  <p className="text-xs text-muted-foreground mb-1">{t.label}</p>
-                  <p className="text-lg font-semibold font-mono" style={{ color: t.color }}>
+                <div key={t.key} className="text-center rounded-lg border p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">{t.shortLabel}</p>
+                  <p className="text-lg font-bold font-mono" style={{ color: t.color }}>
                     {latestRow[t.key] != null ? `${Number(latestRow[t.key]).toFixed(5)}%` : '—'}
                   </p>
                 </div>
@@ -255,7 +276,7 @@ export default function EiborManagement() {
         </Card>
       )}
 
-      {/* Manual Update */}
+      {/* SECTION 3 — Manual Update */}
       <Card className="bg-background">
         <CardHeader>
           <CardTitle className="text-base">Add / Update EIBOR Fixing</CardTitle>
