@@ -5,17 +5,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, FileText, LogOut, Shield, Trophy } from 'lucide-react';
+import { Plus, FileText, LogOut, Shield } from 'lucide-react';
 import { formatCurrency } from '@/lib/mortgage-utils';
 
 interface QualRow {
   id: string;
-  created_at: string;
   full_name: string | null;
   loan_amount: number | null;
-  dbr_pct: number | null;
-  approved_count: number | null;
-  top_bank: string | null;
+  dbr_percent: number | null;
+  saved_at: string;
 }
 
 export default function Dashboard() {
