@@ -1040,7 +1040,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
             {/* Save */}
             <Button onClick={handleSave} disabled={saving} className="w-full bg-accent text-accent-foreground hover:bg-accent/90" size="lg">
               <Save className="mr-2 h-4 w-4" />
-              {saving ? 'Saving…' : 'Save Qualification'}
+              {saving ? 'Saving…' : editApplicantId ? 'Save & Update' : 'Save Qualification'}
             </Button>
           </div>
         </div>
