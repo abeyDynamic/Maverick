@@ -94,7 +94,7 @@ export default function Dashboard() {
           <Card className="bg-background">
             <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">This Month</CardTitle></CardHeader>
             <CardContent><p className="text-3xl font-bold text-primary">{qualifications.filter(a => {
-              const d = new Date(a.created_at);
+              const d = new Date(a.saved_at);
               const now = new Date();
               return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
             }).length}</p></CardContent>
