@@ -146,7 +146,7 @@ export default function QualifyEdit() {
           <Button variant="ghost" size="sm" className="text-primary-foreground hover:bg-primary/80" onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h1 className="text-xl font-semibold">Saved Results — {savedData.client_name || 'Client'}</h1>
+          <h1 className="text-xl font-semibold">Saved Results — {savedData.full_name || 'Unnamed Client'}</h1>
         </div>
       </header>
 
