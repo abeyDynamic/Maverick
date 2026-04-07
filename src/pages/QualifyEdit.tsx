@@ -38,7 +38,7 @@ interface SavedCostEntry {
 
 interface SavedData {
   id: string;
-  client_name: string | null;
+  full_name: string | null;
   created_at: string;
   bank_results: SavedBankResult[] | null;
   cost_comparison: SavedCostEntry[] | null;
@@ -75,7 +75,7 @@ export default function QualifyEdit() {
     async function load() {
       setLoading(true);
       const [appRes, propRes] = await Promise.all([
-        supabase.from('applicants').select('id, client_name, created_at, bank_results, cost_comparison, dbr_pct, approved_count').eq('id', id).single(),
+        supabase.from('applicants').select('id, full_name, created_at, bank_results, cost_comparison, dbr_pct, approved_count').eq('id', id).single(),
         supabase.from('property_details').select('property_value, loan_amount, ltv, emirate, preferred_tenor_months').eq('applicant_id', id).single(),
       ]);
 
@@ -97,7 +97,7 @@ export default function QualifyEdit() {
 
       setSavedData({
         id: app.id,
-        client_name: app.client_name,
+        full_name: app.full_name,
         created_at: app.created_at,
         bank_results: app.bank_results,
         cost_comparison: app.cost_comparison,
@@ -146,7 +146,7 @@ export default function QualifyEdit() {
           <Button variant="ghost" size="sm" className="text-primary-foreground hover:bg-primary/80" onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h1 className="text-xl font-semibold">Saved Results — {savedData.client_name || 'Client'}</h1>
+          <h1 className="text-xl font-semibold">Saved Results — {savedData.full_name || 'Unnamed Client'}</h1>
         </div>
       </header>
 
@@ -156,7 +156,7 @@ export default function QualifyEdit() {
           <CardContent className="py-4 px-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                <span className="font-semibold text-foreground">{savedData.client_name || 'Client'}</span>
+                <span className="font-semibold text-foreground">{savedData.full_name || 'Unnamed Client'}</span>
                 {savedData.loan_amount != null && (
                   <span className="text-muted-foreground">Loan: <strong className="text-foreground">AED {formatCurrency(savedData.loan_amount)}</strong></span>
                 )}

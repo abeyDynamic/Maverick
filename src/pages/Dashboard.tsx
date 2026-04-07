@@ -11,7 +11,7 @@ import { formatCurrency } from '@/lib/mortgage-utils';
 interface QualRow {
   id: string;
   created_at: string;
-  client_name: string | null;
+  full_name: string | null;
   loan_amount: number | null;
   dbr_pct: number | null;
   approved_count: number | null;
@@ -30,7 +30,7 @@ export default function Dashboard() {
       // Fetch applicants with saved results summary
       const { data: apps } = await supabase
         .from('applicants')
-        .select('id, created_at, client_name, dbr_pct, approved_count, cost_comparison')
+        .select('id, created_at, full_name, dbr_pct, approved_count, cost_comparison')
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false })
         .limit(20) as any;
@@ -57,7 +57,7 @@ export default function Dashboard() {
           return {
             id: a.id,
             created_at: a.created_at,
-            client_name: a.client_name ?? null,
+            full_name: a.full_name ?? null,
             loan_amount: pd?.loan_amount ?? null,
             dbr_pct: a.dbr_pct ?? null,
             approved_count: a.approved_count ?? null,
@@ -146,7 +146,7 @@ export default function Dashboard() {
                       <FileText className="h-5 w-5 text-accent" />
                       <div>
                         <p className="font-medium text-primary">
-                          {q.client_name || 'Unknown Client'}
+                          {q.full_name || 'Unnamed Client'}
                         </p>
                         <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
                           {q.loan_amount != null && (
