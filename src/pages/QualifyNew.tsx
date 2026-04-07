@@ -86,6 +86,17 @@ function toNullableNumber(value: unknown): number | null {
   return null;
 }
 
+/** Normalize processing fee to a percentage value (e.g. 1 for 1%).
+ *  Handles: decimal form (0.01 → 1%), percentage form (1 → 1%), absurd values (>10 → null) */
+function normalizeProcessingFeePercent(value: number | null): number | null {
+  if (value === null) return null;
+  // If stored as decimal (e.g. 0.01 for 1%), convert to percentage
+  if (value > 0 && value < 0.5) return value * 100;
+  // If clearly unreasonable (>10%), likely a flat fee or data error — ignore
+  if (value > 10) return null;
+  return value;
+}
+
 /** Normalize product rate to annual decimal form (e.g. 0.0399 stays 0.0399, 3.99 becomes 0.0399) */
 function normalizeRateToDecimal(rate: number | null): number | null {
   if (rate === null) return null;
@@ -242,7 +253,7 @@ function selectPreferredProduct(products: ProductRow[], context: ProductSelectio
     bank_id: chosen.bank_id,
     rate: chosen.numericRate,
     fixed_period_months: chosen.fixedMonths,
-    processing_fee_percent: toNullableNumber(chosen.processing_fee_percent) ?? toNullableNumber(chosen.processing_fee),
+    processing_fee_percent: normalizeProcessingFeePercent(toNullableNumber(chosen.processing_fee_percent) ?? toNullableNumber(chosen.processing_fee)),
     valuation_fee: toNullableNumber(chosen.valuation_fee),
     life_ins_monthly_percent: toNullableNumber(chosen.life_ins_monthly_percent) ?? toNullableNumber(chosen.life_ins_monthly),
     prop_ins_annual_percent: toNullableNumber(chosen.prop_ins_annual_percent) ?? toNullableNumber(chosen.prop_ins_annual),
@@ -359,6 +370,107 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
     loadProducts();
   }, [txnType, salaryTransfer, empType, residency]);
+
+  // Load existing applicant data when editing
+  useEffect(() => {
+    if (!editApplicantId) return;
+    async function loadApplicant() {
+      const [appRes, propRes, incRes, liabRes, cbRes] = await Promise.all([
+        supabase.from('applicants').select('*').eq('id', editApplicantId).single(),
+        supabase.from('property_details').select('*').eq('applicant_id', editApplicantId).single(),
+        supabase.from('income_fields').select('*').eq('applicant_id', editApplicantId),
+        supabase.from('liability_fields').select('*').eq('applicant_id', editApplicantId),
+        supabase.from('co_borrowers').select('*').eq('applicant_id', editApplicantId).order('index' as any),
+      ]);
+
+      const app = appRes.data as any;
+      const prop = propRes.data as any;
+
+      if (app) {
+        setClientName(app.full_name || '');
+        setResidency(app.residency_status || '');
+        setNationality(app.nationality || '');
+        setDob(app.date_of_birth ? new Date(app.date_of_birth + 'T00:00:00') : null);
+        setEmpType(app.employment_type || '');
+      }
+
+      if (prop) {
+        setPropertyValue(prop.property_value || 0);
+        setLoanAmount(prop.loan_amount || 0);
+        setLtv(prop.ltv || 80);
+        setEmirate(prop.emirate || 'dubai');
+        setIsDIFC(prop.is_difc || false);
+        setIsAlAin(prop.is_al_ain || false);
+        setTxnType(prop.transaction_type || 'resale');
+        setPropertyType(prop.property_type || '');
+        setPurpose(prop.purpose || '');
+        setLoanTypePref(prop.loan_type_preference || 'best');
+        setTenorMonths(prop.preferred_tenor_months || 300);
+        setNominalRate(prop.nominal_rate || 4.5);
+        setStressRate(prop.stress_rate || 7.5);
+        // salary_transfer may not be in property_details; keep default
+      }
+
+      const incData = (incRes.data ?? []) as any[];
+      const mainIncome = incData.filter((f: any) => f.owner_type === 'main');
+      if (mainIncome.length > 0) {
+        setSelectedIncomeTypes(mainIncome.map((f: any) => f.income_type));
+        setIncomeFields(mainIncome.map((f: any) => ({
+          income_type: f.income_type,
+          amount: f.amount || 0,
+          percent_considered: f.percent_considered || 100,
+          recurrence: f.recurrence || 'monthly',
+        })));
+      }
+
+      const liabData = (liabRes.data ?? []) as any[];
+      const mainLiab = liabData.filter((f: any) => f.owner_type === 'main');
+      if (mainLiab.length > 0) {
+        setSelectedLiabilityTypes(mainLiab.map((f: any) => f.liability_type));
+        setLiabilityFields(mainLiab.map((f: any) => ({
+          liability_type: f.liability_type,
+          amount: f.amount || 0,
+          credit_card_limit: f.credit_card_limit || 0,
+          recurrence: f.recurrence || 'monthly',
+          closed_before_application: f.closed_before_application || false,
+          liability_letter_obtained: f.liability_letter_obtained || false,
+        })));
+      }
+
+      const cbData = (cbRes.data ?? []) as any[];
+      if (cbData.length > 0) {
+        const cbs: CoBorrowerData[] = cbData.map((cb: any, i: number) => {
+          const cbIncome = incData.filter((f: any) => f.owner_type === 'co_borrower' && f.co_borrower_index === i);
+          const cbLiab = liabData.filter((f: any) => f.owner_type === 'co_borrower' && f.co_borrower_index === i);
+          return {
+            name: cb.name || '',
+            relationship: cb.relationship || '',
+            employment_type: cb.employment_type || '',
+            date_of_birth: cb.date_of_birth ? new Date(cb.date_of_birth + 'T00:00:00') : null,
+            residency_status: cb.residency_status || '',
+            incomeFields: cbIncome.map((f: any) => ({
+              income_type: f.income_type,
+              amount: f.amount || 0,
+              percent_considered: f.percent_considered || 100,
+              recurrence: f.recurrence || 'monthly',
+            })),
+            liabilityFields: cbLiab.map((f: any) => ({
+              liability_type: f.liability_type,
+              amount: f.amount || 0,
+              credit_card_limit: f.credit_card_limit || 0,
+              recurrence: f.recurrence || 'monthly',
+              closed_before_application: f.closed_before_application || false,
+              liability_letter_obtained: f.liability_letter_obtained || false,
+            })),
+            selectedIncomeTypes: cbIncome.map((f: any) => f.income_type),
+            selectedLiabilityTypes: cbLiab.map((f: any) => f.liability_type),
+          };
+        });
+        setCoBorrowers(cbs);
+      }
+    }
+    loadApplicant();
+  }, [editApplicantId]);
 
   // Section 3 — Income
   const [selectedIncomeTypes, setSelectedIncomeTypes] = useState<string[]>([]);
@@ -558,29 +670,50 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
     setSaving(true);
     try {
-      // Build saved results JSONB
       const savedBankResults = buildSavedBankResults();
       const savedCostComparison = buildSavedCostComparison();
-      // Use the first bank's DBR as a representative DBR
       const representativeDbr = savedBankResults.length > 0 ? savedBankResults[0].dbr_percent : null;
 
-      const { data: applicant, error: appErr } = await supabase
-        .from('applicants')
-        .insert({
-          user_id: user.id,
+      let appId: string;
+
+      if (editApplicantId) {
+        // Update existing applicant
+        appId = editApplicantId;
+        await supabase.from('applicants').update({
           full_name: clientName || null,
           residency_status: residency,
           nationality,
           date_of_birth: dob ? format(dob, 'yyyy-MM-dd') : null,
           employment_type: empType || null,
-        } as any)
-        .select('id')
-        .single();
+        } as any).eq('id', appId);
 
-      if (appErr || !applicant) throw appErr || new Error('Failed to create applicant');
-      const appId = applicant.id;
+        // Delete old related records and re-insert
+        await Promise.all([
+          supabase.from('property_details').delete().eq('applicant_id', appId),
+          supabase.from('income_fields').delete().eq('applicant_id', appId),
+          supabase.from('liability_fields').delete().eq('applicant_id', appId),
+          supabase.from('co_borrowers').delete().eq('applicant_id', appId),
+        ]);
+      } else {
+        // Create new applicant
+        const { data: applicant, error: appErr } = await supabase
+          .from('applicants')
+          .insert({
+            user_id: user.id,
+            full_name: clientName || null,
+            residency_status: residency,
+            nationality,
+            date_of_birth: dob ? format(dob, 'yyyy-MM-dd') : null,
+            employment_type: empType || null,
+          } as any)
+          .select('id')
+          .single();
 
-      // Save qualification results to separate table
+        if (appErr || !applicant) throw appErr || new Error('Failed to create applicant');
+        appId = applicant.id;
+      }
+
+      // Always insert a new qualification_results snapshot
       await supabase.from('qualification_results').insert({
         applicant_id: appId,
         loan_amount: loanAmount || null,
@@ -588,7 +721,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         bank_results: savedBankResults,
         cost_comparison: savedCostComparison,
       } as any);
-
 
       await supabase.from('property_details').insert({
         applicant_id: appId,
@@ -655,7 +787,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
           <Button variant="ghost" size="sm" className="text-primary-foreground hover:bg-primary/80" onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h1 className="text-lg font-semibold">New Qualification</h1>
+          <h1 className="text-lg font-semibold">{editApplicantId ? 'Edit Qualification' : 'New Qualification'}</h1>
         </div>
       </header>
 
@@ -908,7 +1040,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
             {/* Save */}
             <Button onClick={handleSave} disabled={saving} className="w-full bg-accent text-accent-foreground hover:bg-accent/90" size="lg">
               <Save className="mr-2 h-4 w-4" />
-              {saving ? 'Saving…' : 'Save Qualification'}
+              {saving ? 'Saving…' : editApplicantId ? 'Save & Update' : 'Save Qualification'}
             </Button>
           </div>
         </div>

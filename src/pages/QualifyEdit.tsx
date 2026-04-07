@@ -1,11 +1,12 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Edit, CheckCircle2, XCircle, Trophy } from 'lucide-react';
+import { ArrowLeft, Edit, Printer, CheckCircle2, XCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/mortgage-utils';
 import { cn } from '@/lib/utils';
 import QualifyNew from './QualifyNew';
@@ -65,6 +66,7 @@ function formatDbrLimit(val: number): string {
 export default function QualifyEdit() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [savedData, setSavedData] = useState<SavedData | null>(null);
   const [editMode, setEditMode] = useState(false);
@@ -89,7 +91,6 @@ export default function QualifyEdit() {
         return;
       }
 
-      // If no saved results, go straight to edit mode
       if (!qr || !qr.bank_results || !Array.isArray(qr.bank_results) || qr.bank_results.length === 0) {
         setEditMode(true);
         setLoading(false);
@@ -114,7 +115,6 @@ export default function QualifyEdit() {
     load();
   }, [id]);
 
-  // Edit mode: render QualifyNew with pre-loaded data
   if (editMode) {
     return <QualifyNew editApplicantId={id} />;
   }
@@ -138,10 +138,16 @@ export default function QualifyEdit() {
   const bankResults = savedData.bank_results ?? [];
   const costComparison = (savedData.cost_comparison ?? []).sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99));
   const approvedBanks = bankResults.filter(r => r.eligible);
+  const adviserEmail = user?.email ?? 'Adviser';
+
+  function handlePrint() {
+    window.print();
+  }
 
   return (
-    <div className="min-h-screen bg-secondary">
-      <header className="bg-primary text-primary-foreground">
+    <div className="min-h-screen bg-secondary print-report">
+      {/* Header — hidden in print */}
+      <header className="bg-primary text-primary-foreground print-hide">
         <div className="container mx-auto flex items-center gap-4 py-4 px-6">
           <Button variant="ghost" size="sm" className="text-primary-foreground hover:bg-primary/80" onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="h-4 w-4" />
@@ -150,7 +156,20 @@ export default function QualifyEdit() {
         </div>
       </header>
 
-      <main className="container mx-auto px-6 py-8 space-y-6">
+      {/* Print-only header */}
+      <div className="hidden print-show px-6 pt-4 pb-2">
+        <div className="flex items-center justify-between border-b pb-3">
+          <div>
+            <h1 className="text-lg font-bold text-primary">KSquare — Mortgage Qualification Report</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">Prepared by {adviserEmail}</p>
+          </div>
+          <p className="text-[10px] text-muted-foreground max-w-[280px] text-right italic">
+            For illustrative purposes only — subject to change at final offer stage
+          </p>
+        </div>
+      </div>
+
+      <main className="container mx-auto px-6 py-8 space-y-6 print:py-2 print:space-y-4">
         {/* Summary Bar */}
         <Card className="bg-background">
           <CardContent className="py-4 px-6">
@@ -172,14 +191,19 @@ export default function QualifyEdit() {
                 <span className="text-muted-foreground">Tenor: <strong className="text-foreground">{savedData.preferred_tenor_months}m</strong></span>
                 <span className="text-muted-foreground">Saved: <strong className="text-foreground">{new Date(savedData.saved_at).toLocaleDateString()}</strong></span>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
-                <Edit className="h-4 w-4 mr-1" /> Edit & Recalculate
-              </Button>
+              <div className="flex gap-2 print-hide">
+                <Button variant="outline" size="sm" onClick={handlePrint}>
+                  <Printer className="h-4 w-4 mr-1" /> Print
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
+                  <Edit className="h-4 w-4 mr-1" /> Edit & Recalculate
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Bank Eligibility from saved data */}
+        {/* Bank Eligibility */}
         <Card className="bg-background">
           <CardHeader className="py-3 px-4">
             <CardTitle className="text-sm font-semibold text-primary">Bank Eligibility ({approvedBanks.length} approved / {bankResults.length} total)</CardTitle>
@@ -235,7 +259,7 @@ export default function QualifyEdit() {
           </CardContent>
         </Card>
 
-        {/* Cost Comparison from saved data */}
+        {/* Cost Comparison */}
         {costComparison.length > 0 && (
           <Card className="bg-background">
             <CardHeader className="py-3 px-4">
@@ -281,6 +305,13 @@ export default function QualifyEdit() {
             </CardContent>
           </Card>
         )}
+
+        {/* Print-only footer disclaimer */}
+        <div className="hidden print-show text-center pt-4 border-t">
+          <p className="text-[9px] text-muted-foreground italic">
+            For illustrative purposes only — subject to change at final offer stage. Generated {new Date().toLocaleDateString()}.
+          </p>
+        </div>
       </main>
     </div>
   );
