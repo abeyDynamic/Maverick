@@ -792,6 +792,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
           <h1 className="text-lg font-semibold">{editApplicantId ? 'Edit Qualification' : 'New Qualification'}</h1>
         </div>
       </header>
+      <GlobalEiborBar />
 
       {/* Two-column layout */}
       <div className="flex flex-1 min-h-0">

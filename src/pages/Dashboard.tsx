@@ -147,6 +147,9 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* EIBOR Chart Section */}
+        <DashboardEiborChart />
       </main>
     </div>
   );
