@@ -75,7 +75,7 @@ export default function QualifyEdit() {
     async function load() {
       setLoading(true);
       const [appRes, propRes] = await Promise.all([
-        supabase.from('applicants').select('id, client_name, created_at, bank_results, cost_comparison, dbr_pct, approved_count').eq('id', id).single(),
+        supabase.from('applicants').select('id, full_name, created_at, bank_results, cost_comparison, dbr_pct, approved_count').eq('id', id).single(),
         supabase.from('property_details').select('property_value, loan_amount, ltv, emirate, preferred_tenor_months').eq('applicant_id', id).single(),
       ]);
 
