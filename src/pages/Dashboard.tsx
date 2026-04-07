@@ -11,7 +11,7 @@ import { formatCurrency } from '@/lib/mortgage-utils';
 interface QualRow {
   id: string;
   created_at: string;
-  client_name: string | null;
+  full_name: string | null;
   loan_amount: number | null;
   dbr_pct: number | null;
   approved_count: number | null;
