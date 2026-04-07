@@ -58,9 +58,9 @@ export default function Dashboard() {
         <div className="container mx-auto flex items-center justify-between py-4 px-6">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-accent">
-              <span className="text-sm font-bold text-accent-foreground">K²</span>
+              <span className="text-sm font-bold text-accent-foreground">M</span>
             </div>
-            <h1 className="text-xl font-semibold">KSquare Mortgage Engine</h1>
+            <h1 className="text-xl font-semibold">Maverick Mortgage Engine</h1>
           </div>
           <div className="flex items-center gap-3">
             {role === 'admin' && (

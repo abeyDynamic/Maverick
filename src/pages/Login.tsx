@@ -34,9 +34,9 @@ export default function Login() {
       <Card className="w-full max-w-md bg-background">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-            <span className="text-xl font-bold text-primary-foreground">K²</span>
+            <span className="text-xl font-bold text-primary-foreground">M</span>
           </div>
-          <CardTitle className="text-2xl font-bold text-primary">KSquare Mortgage Engine</CardTitle>
+          <CardTitle className="text-2xl font-bold text-primary">Maverick Mortgage Engine</CardTitle>
           <p className="text-muted-foreground text-sm">Sign in to your adviser account</p>
         </CardHeader>
         <CardContent>

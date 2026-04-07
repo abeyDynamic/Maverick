@@ -160,7 +160,7 @@ export default function QualifyEdit() {
       <div className="hidden print-show px-6 pt-4 pb-2">
         <div className="flex items-center justify-between border-b pb-3">
           <div>
-            <h1 className="text-lg font-bold text-primary">KSquare — Mortgage Qualification Report</h1>
+            <h1 className="text-lg font-bold text-primary">Maverick — Mortgage Qualification Report</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Prepared by {adviserEmail}</p>
           </div>
           <p className="text-[10px] text-muted-foreground max-w-[280px] text-right italic">
