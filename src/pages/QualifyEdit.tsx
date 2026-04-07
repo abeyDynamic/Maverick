@@ -97,7 +97,7 @@ export default function QualifyEdit() {
 
       setSavedData({
         id: app.id,
-        client_name: app.client_name,
+        full_name: app.full_name,
         created_at: app.created_at,
         bank_results: app.bank_results,
         cost_comparison: app.cost_comparison,
