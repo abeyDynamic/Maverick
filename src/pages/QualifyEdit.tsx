@@ -38,7 +38,7 @@ interface SavedCostEntry {
 
 interface SavedData {
   id: string;
-  client_name: string | null;
+  full_name: string | null;
   created_at: string;
   bank_results: SavedBankResult[] | null;
   cost_comparison: SavedCostEntry[] | null;
