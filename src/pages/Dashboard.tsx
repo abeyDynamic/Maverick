@@ -30,7 +30,7 @@ export default function Dashboard() {
       // Fetch applicants with saved results summary
       const { data: apps } = await supabase
         .from('applicants')
-        .select('id, created_at, client_name, dbr_pct, approved_count, cost_comparison')
+        .select('id, created_at, full_name, dbr_pct, approved_count, cost_comparison')
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false })
         .limit(20) as any;
