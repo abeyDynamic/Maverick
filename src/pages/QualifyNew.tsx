@@ -371,6 +371,107 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     loadProducts();
   }, [txnType, salaryTransfer, empType, residency]);
 
+  // Load existing applicant data when editing
+  useEffect(() => {
+    if (!editApplicantId) return;
+    async function loadApplicant() {
+      const [appRes, propRes, incRes, liabRes, cbRes] = await Promise.all([
+        supabase.from('applicants').select('*').eq('id', editApplicantId).single(),
+        supabase.from('property_details').select('*').eq('applicant_id', editApplicantId).single(),
+        supabase.from('income_fields').select('*').eq('applicant_id', editApplicantId),
+        supabase.from('liability_fields').select('*').eq('applicant_id', editApplicantId),
+        supabase.from('co_borrowers').select('*').eq('applicant_id', editApplicantId).order('index' as any),
+      ]);
+
+      const app = appRes.data as any;
+      const prop = propRes.data as any;
+
+      if (app) {
+        setClientName(app.full_name || '');
+        setResidency(app.residency_status || '');
+        setNationality(app.nationality || '');
+        setDob(app.date_of_birth ? new Date(app.date_of_birth + 'T00:00:00') : null);
+        setEmpType(app.employment_type || '');
+      }
+
+      if (prop) {
+        setPropertyValue(prop.property_value || 0);
+        setLoanAmount(prop.loan_amount || 0);
+        setLtv(prop.ltv || 80);
+        setEmirate(prop.emirate || 'dubai');
+        setIsDIFC(prop.is_difc || false);
+        setIsAlAin(prop.is_al_ain || false);
+        setTxnType(prop.transaction_type || 'resale');
+        setPropertyType(prop.property_type || '');
+        setPurpose(prop.purpose || '');
+        setLoanTypePref(prop.loan_type_preference || 'best');
+        setTenorMonths(prop.preferred_tenor_months || 300);
+        setNominalRate(prop.nominal_rate || 4.5);
+        setStressRate(prop.stress_rate || 7.5);
+        // salary_transfer may not be in property_details; keep default
+      }
+
+      const incData = (incRes.data ?? []) as any[];
+      const mainIncome = incData.filter((f: any) => f.owner_type === 'main');
+      if (mainIncome.length > 0) {
+        setSelectedIncomeTypes(mainIncome.map((f: any) => f.income_type));
+        setIncomeFields(mainIncome.map((f: any) => ({
+          income_type: f.income_type,
+          amount: f.amount || 0,
+          percent_considered: f.percent_considered || 100,
+          recurrence: f.recurrence || 'monthly',
+        })));
+      }
+
+      const liabData = (liabRes.data ?? []) as any[];
+      const mainLiab = liabData.filter((f: any) => f.owner_type === 'main');
+      if (mainLiab.length > 0) {
+        setSelectedLiabilityTypes(mainLiab.map((f: any) => f.liability_type));
+        setLiabilityFields(mainLiab.map((f: any) => ({
+          liability_type: f.liability_type,
+          amount: f.amount || 0,
+          credit_card_limit: f.credit_card_limit || 0,
+          recurrence: f.recurrence || 'monthly',
+          closed_before_application: f.closed_before_application || false,
+          liability_letter_obtained: f.liability_letter_obtained || false,
+        })));
+      }
+
+      const cbData = (cbRes.data ?? []) as any[];
+      if (cbData.length > 0) {
+        const cbs: CoBorrowerData[] = cbData.map((cb: any, i: number) => {
+          const cbIncome = incData.filter((f: any) => f.owner_type === 'co_borrower' && f.co_borrower_index === i);
+          const cbLiab = liabData.filter((f: any) => f.owner_type === 'co_borrower' && f.co_borrower_index === i);
+          return {
+            name: cb.name || '',
+            relationship: cb.relationship || '',
+            employment_type: cb.employment_type || '',
+            date_of_birth: cb.date_of_birth ? new Date(cb.date_of_birth + 'T00:00:00') : null,
+            residency_status: cb.residency_status || '',
+            incomeFields: cbIncome.map((f: any) => ({
+              income_type: f.income_type,
+              amount: f.amount || 0,
+              percent_considered: f.percent_considered || 100,
+              recurrence: f.recurrence || 'monthly',
+            })),
+            liabilityFields: cbLiab.map((f: any) => ({
+              liability_type: f.liability_type,
+              amount: f.amount || 0,
+              credit_card_limit: f.credit_card_limit || 0,
+              recurrence: f.recurrence || 'monthly',
+              closed_before_application: f.closed_before_application || false,
+              liability_letter_obtained: f.liability_letter_obtained || false,
+            })),
+            selectedIncomeTypes: cbIncome.map((f: any) => f.income_type),
+            selectedLiabilityTypes: cbLiab.map((f: any) => f.liability_type),
+          };
+        });
+        setCoBorrowers(cbs);
+      }
+    }
+    loadApplicant();
+  }, [editApplicantId]);
+
   // Section 3 — Income
   const [selectedIncomeTypes, setSelectedIncomeTypes] = useState<string[]>([]);
   const [incomeFields, setIncomeFields] = useState<IncomeEntry[]>([]);
