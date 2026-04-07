@@ -243,6 +243,7 @@ export default function Results() {
           <h1 className="text-xl font-semibold">Results — Bank Comparison</h1>
         </div>
       </header>
+      <GlobalEiborBar />
 
       <main className="container mx-auto px-6 py-8 space-y-6">
         {/* SUMMARY BAR */}
