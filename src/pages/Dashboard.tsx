@@ -5,44 +5,41 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, FileText, LogOut, Shield } from 'lucide-react';
+import { Plus, FileText, LogOut, Shield, Trophy } from 'lucide-react';
 import { formatCurrency } from '@/lib/mortgage-utils';
 
 interface QualRow {
   id: string;
   created_at: string;
   client_name: string | null;
-  residency_status: string | null;
-  nationality: string | null;
-  employment_type: string | null;
   loan_amount: number | null;
   dbr_pct: number | null;
   approved_count: number | null;
+  top_bank: string | null;
 }
 
 export default function Dashboard() {
   const { user, role, signOut } = useAuth();
   const navigate = useNavigate();
   const [qualifications, setQualifications] = useState<QualRow[]>([]);
-  const [count, setCount] = useState(0);
 
   useEffect(() => {
     if (!user) return;
 
     async function load() {
-      // Fetch applicants with property details for loan amount
+      // Fetch applicants with saved results summary
       const { data: apps } = await supabase
         .from('applicants')
-        .select('id, created_at, client_name, residency_status, nationality, employment_type')
+        .select('id, created_at, client_name, dbr_pct, approved_count, cost_comparison')
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(20) as any;
 
-      if (!apps) { setQualifications([]); setCount(0); return; }
+      if (!apps) { setQualifications([]); return; }
 
-      // For each applicant, fetch property details for loan_amount
+      // For each applicant, get loan_amount from property_details and top bank from cost_comparison
       const rows: QualRow[] = await Promise.all(
-        (apps as any[]).map(async (a) => {
+        (apps as any[]).map(async (a: any) => {
           const { data: pd } = await supabase
             .from('property_details')
             .select('loan_amount')
@@ -50,26 +47,32 @@ export default function Dashboard() {
             .limit(1)
             .single();
 
+          // Extract top ranked bank from cost_comparison jsonb
+          let topBank: string | null = null;
+          if (Array.isArray(a.cost_comparison) && a.cost_comparison.length > 0) {
+            const sorted = [...a.cost_comparison].sort((x: any, y: any) => (x.rank ?? 99) - (y.rank ?? 99));
+            topBank = sorted[0]?.bank_name ?? null;
+          }
+
           return {
             id: a.id,
             created_at: a.created_at,
             client_name: a.client_name ?? null,
-            residency_status: a.residency_status,
-            nationality: a.nationality,
-            employment_type: a.employment_type,
             loan_amount: pd?.loan_amount ?? null,
-            dbr_pct: null, // Could be computed but expensive per row
-            approved_count: null,
+            dbr_pct: a.dbr_pct ?? null,
+            approved_count: a.approved_count ?? null,
+            top_bank: topBank,
           };
         })
       );
 
       setQualifications(rows);
-      setCount(rows.length);
     }
 
     load();
   }, [user]);
+
+  const count = qualifications.length;
 
   return (
     <div className="min-h-screen bg-secondary">
@@ -143,11 +146,25 @@ export default function Dashboard() {
                       <FileText className="h-5 w-5 text-accent" />
                       <div>
                         <p className="font-medium text-primary">
-                          {q.client_name || q.nationality || 'Unknown Client'}
+                          {q.client_name || 'Unknown Client'}
                         </p>
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                          {q.loan_amount && (
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+                          {q.loan_amount != null && (
                             <span>AED {formatCurrency(q.loan_amount)}</span>
+                          )}
+                          {q.dbr_pct != null && (
+                            <span>DBR: <strong className="text-foreground">{Number(q.dbr_pct).toFixed(1)}%</strong></span>
+                          )}
+                          {q.approved_count != null && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                              {q.approved_count} approved
+                            </Badge>
+                          )}
+                          {q.top_bank && (
+                            <span className="flex items-center gap-1">
+                              <Trophy className="h-3 w-3 text-yellow-500" />
+                              <strong className="text-foreground">{q.top_bank}</strong>
+                            </span>
                           )}
                           <span>{new Date(q.created_at).toLocaleDateString()}</span>
                         </div>

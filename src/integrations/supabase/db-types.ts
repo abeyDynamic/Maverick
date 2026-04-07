@@ -30,6 +30,8 @@ export interface Database {
           client_name: string | null;
           residency_status: string | null; nationality: string | null; date_of_birth: string | null;
           employment_type: string | null; employer_name: string | null; employer_category: string | null;
+          bank_results: any[] | null; cost_comparison: any[] | null;
+          dbr_pct: number | null; approved_count: number | null;
         };
         Insert: Partial<Database['public']['Tables']['applicants']['Row']> & { user_id: string };
         Update: Partial<Database['public']['Tables']['applicants']['Row']>;
