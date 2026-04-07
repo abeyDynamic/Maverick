@@ -1055,8 +1055,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
               <p className="text-sm font-semibold text-primary">{clientName}</p>
             )}
 
-            {/* EIBOR Panel */}
-            <EiborPanel />
 
             {/* Session Reminders — global notes above DBR bar */}
             <SessionRemindersPanel
