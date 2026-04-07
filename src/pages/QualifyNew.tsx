@@ -19,7 +19,7 @@ import { IncomeFieldCard, IncomeEntry, createIncomeEntry } from '@/components/qu
 import { LiabilityFieldCard, LiabilityEntry, createLiabilityEntry } from '@/components/qualify/LiabilityFieldCard';
 import { CoBorrowerSection, CoBorrowerData, createCoBorrower } from '@/components/qualify/CoBorrowerSection';
 import DBRSummaryBar from '@/components/results/DBRSummaryBar';
-import EiborPanel from '@/components/qualify/EiborPanel';
+import GlobalEiborBar from '@/components/GlobalEiborBar';
 import BankEligibilityTable, { useBankResults, buildWhatIfAnalysis } from '@/components/results/BankEligibilityTable';
 import WhatIfChat from '@/components/results/WhatIfChat';
 import CostBreakdownSection, { type ProductData } from '@/components/results/CostBreakdownSection';
