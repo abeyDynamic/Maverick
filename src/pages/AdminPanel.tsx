@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft } from 'lucide-react';
 import EiborManagement from '@/components/admin/EiborManagement';
+import GlobalEiborBar from '@/components/GlobalEiborBar';
 
 export default function AdminPanel() {
   const navigate = useNavigate();
