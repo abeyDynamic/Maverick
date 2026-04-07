@@ -561,7 +561,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
       // Build saved results JSONB
       const savedBankResults = buildSavedBankResults();
       const savedCostComparison = buildSavedCostComparison();
-      const approvedCount = savedBankResults.filter(r => r.eligible).length;
       // Use the first bank's DBR as a representative DBR
       const representativeDbr = savedBankResults.length > 0 ? savedBankResults[0].dbr_percent : null;
 
@@ -574,16 +573,22 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
           nationality,
           date_of_birth: dob ? format(dob, 'yyyy-MM-dd') : null,
           employment_type: empType || null,
-          bank_results: savedBankResults,
-          cost_comparison: savedCostComparison,
-          dbr_pct: representativeDbr,
-          approved_count: approvedCount,
         } as any)
         .select('id')
         .single();
 
       if (appErr || !applicant) throw appErr || new Error('Failed to create applicant');
       const appId = applicant.id;
+
+      // Save qualification results to separate table
+      await supabase.from('qualification_results').insert({
+        applicant_id: appId,
+        loan_amount: loanAmount || null,
+        dbr_percent: representativeDbr,
+        bank_results: savedBankResults,
+        cost_comparison: savedCostComparison,
+      } as any);
+
 
       await supabase.from('property_details').insert({
         applicant_id: appId,

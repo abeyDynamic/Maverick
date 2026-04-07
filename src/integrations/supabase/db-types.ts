@@ -30,11 +30,20 @@ export interface Database {
           full_name: string | null;
           residency_status: string | null; nationality: string | null; date_of_birth: string | null;
           employment_type: string | null; employer_name: string | null; employer_category: string | null;
-          bank_results: any[] | null; cost_comparison: any[] | null;
-          dbr_pct: number | null; approved_count: number | null;
         };
         Insert: Partial<Database['public']['Tables']['applicants']['Row']> & { user_id: string };
         Update: Partial<Database['public']['Tables']['applicants']['Row']>;
+      };
+      qualification_results: {
+        Row: {
+          id: string; applicant_id: string; saved_at: string;
+          loan_amount: number | null;
+          dbr_percent: number | null;
+          bank_results: Json | null;
+          cost_comparison: Json | null;
+        };
+        Insert: Partial<Database['public']['Tables']['qualification_results']['Row']> & { applicant_id: string };
+        Update: Partial<Database['public']['Tables']['qualification_results']['Row']>;
       };
       income_fields: {
         Row: {

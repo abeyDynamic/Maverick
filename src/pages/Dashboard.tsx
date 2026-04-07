@@ -4,18 +4,16 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Plus, FileText, LogOut, Shield, Trophy } from 'lucide-react';
+
+import { Plus, FileText, LogOut, Shield } from 'lucide-react';
 import { formatCurrency } from '@/lib/mortgage-utils';
 
 interface QualRow {
   id: string;
-  created_at: string;
   full_name: string | null;
   loan_amount: number | null;
-  dbr_pct: number | null;
-  approved_count: number | null;
-  top_bank: string | null;
+  dbr_percent: number | null;
+  saved_at: string;
 }
 
 export default function Dashboard() {
@@ -28,43 +26,23 @@ export default function Dashboard() {
 
     async function load() {
       // Fetch applicants with saved results summary
-      const { data: apps } = await supabase
-        .from('applicants')
-        .select('id, created_at, full_name, dbr_pct, approved_count, cost_comparison')
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false })
+      // Join applicants with qualification_results
+      const { data: results } = await supabase
+        .from('qualification_results')
+        .select('applicant_id, loan_amount, dbr_percent, saved_at, applicants!inner(id, full_name, user_id)')
+        .eq('applicants.user_id', user!.id)
+        .order('saved_at', { ascending: false })
         .limit(20) as any;
 
-      if (!apps) { setQualifications([]); return; }
+      if (!results) { setQualifications([]); return; }
 
-      // For each applicant, get loan_amount from property_details and top bank from cost_comparison
-      const rows: QualRow[] = await Promise.all(
-        (apps as any[]).map(async (a: any) => {
-          const { data: pd } = await supabase
-            .from('property_details')
-            .select('loan_amount')
-            .eq('applicant_id', a.id)
-            .limit(1)
-            .single();
-
-          // Extract top ranked bank from cost_comparison jsonb
-          let topBank: string | null = null;
-          if (Array.isArray(a.cost_comparison) && a.cost_comparison.length > 0) {
-            const sorted = [...a.cost_comparison].sort((x: any, y: any) => (x.rank ?? 99) - (y.rank ?? 99));
-            topBank = sorted[0]?.bank_name ?? null;
-          }
-
-          return {
-            id: a.id,
-            created_at: a.created_at,
-            full_name: a.full_name ?? null,
-            loan_amount: pd?.loan_amount ?? null,
-            dbr_pct: a.dbr_pct ?? null,
-            approved_count: a.approved_count ?? null,
-            top_bank: topBank,
-          };
-        })
-      );
+      const rows: QualRow[] = (results as any[]).map((r: any) => ({
+        id: r.applicant_id,
+        full_name: r.applicants?.full_name ?? null,
+        loan_amount: r.loan_amount ?? null,
+        dbr_percent: r.dbr_percent ?? null,
+        saved_at: r.saved_at,
+      }));
 
       setQualifications(rows);
     }
@@ -116,7 +94,7 @@ export default function Dashboard() {
           <Card className="bg-background">
             <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">This Month</CardTitle></CardHeader>
             <CardContent><p className="text-3xl font-bold text-primary">{qualifications.filter(a => {
-              const d = new Date(a.created_at);
+              const d = new Date(a.saved_at);
               const now = new Date();
               return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
             }).length}</p></CardContent>
@@ -152,21 +130,10 @@ export default function Dashboard() {
                           {q.loan_amount != null && (
                             <span>AED {formatCurrency(q.loan_amount)}</span>
                           )}
-                          {q.dbr_pct != null && (
-                            <span>DBR: <strong className="text-foreground">{Number(q.dbr_pct).toFixed(1)}%</strong></span>
+                          {q.dbr_percent != null && (
+                            <span>DBR: <strong className="text-foreground">{Number(q.dbr_percent).toFixed(1)}%</strong></span>
                           )}
-                          {q.approved_count != null && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                              {q.approved_count} approved
-                            </Badge>
-                          )}
-                          {q.top_bank && (
-                            <span className="flex items-center gap-1">
-                              <Trophy className="h-3 w-3 text-yellow-500" />
-                              <strong className="text-foreground">{q.top_bank}</strong>
-                            </span>
-                          )}
-                          <span>{new Date(q.created_at).toLocaleDateString()}</span>
+                          <span>{new Date(q.saved_at).toLocaleDateString()}</span>
                         </div>
                       </div>
                     </div>

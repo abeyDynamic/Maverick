@@ -39,11 +39,10 @@ interface SavedCostEntry {
 interface SavedData {
   id: string;
   full_name: string | null;
-  created_at: string;
+  saved_at: string;
   bank_results: SavedBankResult[] | null;
   cost_comparison: SavedCostEntry[] | null;
-  dbr_pct: number | null;
-  approved_count: number | null;
+  dbr_percent: number | null;
   property_value: number | null;
   loan_amount: number | null;
   ltv: number | null;
@@ -74,13 +73,15 @@ export default function QualifyEdit() {
     if (!id) return;
     async function load() {
       setLoading(true);
-      const [appRes, propRes] = await Promise.all([
-        supabase.from('applicants').select('id, full_name, created_at, bank_results, cost_comparison, dbr_pct, approved_count').eq('id', id).single(),
+      const [appRes, propRes, qrRes] = await Promise.all([
+        supabase.from('applicants').select('id, full_name').eq('id', id).single(),
         supabase.from('property_details').select('property_value, loan_amount, ltv, emirate, preferred_tenor_months').eq('applicant_id', id).single(),
+        supabase.from('qualification_results').select('saved_at, loan_amount, dbr_percent, bank_results, cost_comparison').eq('applicant_id', id).order('saved_at', { ascending: false }).limit(1).single() as any,
       ]);
 
       const app = appRes.data as any;
       const prop = propRes.data as any;
+      const qr = qrRes.data as any;
 
       if (!app) {
         setSavedData(null);
@@ -89,7 +90,7 @@ export default function QualifyEdit() {
       }
 
       // If no saved results, go straight to edit mode
-      if (!app.bank_results || !Array.isArray(app.bank_results) || app.bank_results.length === 0) {
+      if (!qr || !qr.bank_results || !Array.isArray(qr.bank_results) || qr.bank_results.length === 0) {
         setEditMode(true);
         setLoading(false);
         return;
@@ -98,13 +99,12 @@ export default function QualifyEdit() {
       setSavedData({
         id: app.id,
         full_name: app.full_name,
-        created_at: app.created_at,
-        bank_results: app.bank_results,
-        cost_comparison: app.cost_comparison,
-        dbr_pct: app.dbr_pct,
-        approved_count: app.approved_count,
+        saved_at: qr.saved_at,
+        bank_results: qr.bank_results,
+        cost_comparison: qr.cost_comparison,
+        dbr_percent: qr.dbr_percent,
         property_value: prop?.property_value ?? null,
-        loan_amount: prop?.loan_amount ?? null,
+        loan_amount: qr.loan_amount ?? prop?.loan_amount ?? null,
         ltv: prop?.ltv ?? null,
         emirate: prop?.emirate ?? 'dubai',
         preferred_tenor_months: prop?.preferred_tenor_months ?? 300,
@@ -166,11 +166,11 @@ export default function QualifyEdit() {
                 {savedData.ltv != null && (
                   <span className="text-muted-foreground">LTV: <strong className="text-foreground">{savedData.ltv}%</strong></span>
                 )}
-                {savedData.dbr_pct != null && (
-                  <span className="text-muted-foreground">DBR: <strong className="text-foreground">{Number(savedData.dbr_pct).toFixed(1)}%</strong></span>
+                {savedData.dbr_percent != null && (
+                  <span className="text-muted-foreground">DBR: <strong className="text-foreground">{Number(savedData.dbr_percent).toFixed(1)}%</strong></span>
                 )}
                 <span className="text-muted-foreground">Tenor: <strong className="text-foreground">{savedData.preferred_tenor_months}m</strong></span>
-                <span className="text-muted-foreground">Saved: <strong className="text-foreground">{new Date(savedData.created_at).toLocaleDateString()}</strong></span>
+                <span className="text-muted-foreground">Saved: <strong className="text-foreground">{new Date(savedData.saved_at).toLocaleDateString()}</strong></span>
               </div>
               <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
                 <Edit className="h-4 w-4 mr-1" /> Edit & Recalculate
