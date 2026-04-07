@@ -569,7 +569,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         .from('applicants')
         .insert({
           user_id: user.id,
-          client_name: clientName || null,
+          full_name: clientName || null,
           residency_status: residency,
           nationality,
           date_of_birth: dob ? format(dob, 'yyyy-MM-dd') : null,

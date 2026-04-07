@@ -156,7 +156,7 @@ export default function QualifyEdit() {
           <CardContent className="py-4 px-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                <span className="font-semibold text-foreground">{savedData.client_name || 'Client'}</span>
+                <span className="font-semibold text-foreground">{savedData.full_name || 'Unnamed Client'}</span>
                 {savedData.loan_amount != null && (
                   <span className="text-muted-foreground">Loan: <strong className="text-foreground">AED {formatCurrency(savedData.loan_amount)}</strong></span>
                 )}
