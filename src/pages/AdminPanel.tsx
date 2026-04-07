@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft } from 'lucide-react';
+import EiborManagement from '@/components/admin/EiborManagement';
 
 export default function AdminPanel() {
   const navigate = useNavigate();
@@ -32,7 +33,7 @@ export default function AdminPanel() {
             <Card className="bg-background"><CardHeader><CardTitle>Product Management</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Product management coming soon.</p></CardContent></Card>
           </TabsContent>
           <TabsContent value="eibor">
-            <Card className="bg-background"><CardHeader><CardTitle>EIBOR Rates</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">EIBOR rate management coming soon.</p></CardContent></Card>
+            <EiborManagement />
           </TabsContent>
           <TabsContent value="fees">
             <Card className="bg-background"><CardHeader><CardTitle>Emirate Fees</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Fee management coming soon.</p></CardContent></Card>

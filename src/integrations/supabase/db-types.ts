@@ -63,6 +63,16 @@ export interface Database {
         Insert: Partial<Database['public']['Tables']['liability_fields']['Row']> & { liability_type: string };
         Update: Partial<Database['public']['Tables']['liability_fields']['Row']>;
       };
+      eibor_history: {
+        Row: {
+          id: string; fixing_date: string;
+          overnight: number | null; one_week: number | null; one_month: number | null;
+          three_months: number | null; six_months: number | null; one_year: number | null;
+          created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['eibor_history']['Row']> & { fixing_date: string };
+        Update: Partial<Database['public']['Tables']['eibor_history']['Row']>;
+      };
       co_borrowers: {
         Row: {
           id: string; applicant_id: string; index: number; name: string | null;
