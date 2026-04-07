@@ -166,11 +166,11 @@ export default function QualifyEdit() {
                 {savedData.ltv != null && (
                   <span className="text-muted-foreground">LTV: <strong className="text-foreground">{savedData.ltv}%</strong></span>
                 )}
-                {savedData.dbr_pct != null && (
-                  <span className="text-muted-foreground">DBR: <strong className="text-foreground">{Number(savedData.dbr_pct).toFixed(1)}%</strong></span>
+                {savedData.dbr_percent != null && (
+                  <span className="text-muted-foreground">DBR: <strong className="text-foreground">{Number(savedData.dbr_percent).toFixed(1)}%</strong></span>
                 )}
                 <span className="text-muted-foreground">Tenor: <strong className="text-foreground">{savedData.preferred_tenor_months}m</strong></span>
-                <span className="text-muted-foreground">Saved: <strong className="text-foreground">{new Date(savedData.created_at).toLocaleDateString()}</strong></span>
+                <span className="text-muted-foreground">Saved: <strong className="text-foreground">{new Date(savedData.saved_at).toLocaleDateString()}</strong></span>
               </div>
               <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
                 <Edit className="h-4 w-4 mr-1" /> Edit & Recalculate
