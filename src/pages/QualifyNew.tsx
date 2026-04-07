@@ -257,7 +257,11 @@ function selectPreferredProduct(products: ProductRow[], context: ProductSelectio
 
 // QualNote imported from BankEligibilityTable
 
-export default function QualifyNew() {
+interface QualifyNewProps {
+  editApplicantId?: string;
+}
+
+export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
