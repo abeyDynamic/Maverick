@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, Fragment } from 'react';
+import GlobalEiborBar from '@/components/GlobalEiborBar';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -242,6 +243,7 @@ export default function Results() {
           <h1 className="text-xl font-semibold">Results — Bank Comparison</h1>
         </div>
       </header>
+      <GlobalEiborBar />
 
       <main className="container mx-auto px-6 py-8 space-y-6">
         {/* SUMMARY BAR */}
