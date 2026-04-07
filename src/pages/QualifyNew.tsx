@@ -253,7 +253,7 @@ function selectPreferredProduct(products: ProductRow[], context: ProductSelectio
     bank_id: chosen.bank_id,
     rate: chosen.numericRate,
     fixed_period_months: chosen.fixedMonths,
-    processing_fee_percent: toNullableNumber(chosen.processing_fee_percent) ?? toNullableNumber(chosen.processing_fee),
+    processing_fee_percent: normalizeProcessingFeePercent(toNullableNumber(chosen.processing_fee_percent) ?? toNullableNumber(chosen.processing_fee)),
     valuation_fee: toNullableNumber(chosen.valuation_fee),
     life_ins_monthly_percent: toNullableNumber(chosen.life_ins_monthly_percent) ?? toNullableNumber(chosen.life_ins_monthly),
     prop_ins_annual_percent: toNullableNumber(chosen.prop_ins_annual_percent) ?? toNullableNumber(chosen.prop_ins_annual),
