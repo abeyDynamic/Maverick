@@ -57,7 +57,7 @@ export default function Dashboard() {
           return {
             id: a.id,
             created_at: a.created_at,
-            client_name: a.client_name ?? null,
+            full_name: a.full_name ?? null,
             loan_amount: pd?.loan_amount ?? null,
             dbr_pct: a.dbr_pct ?? null,
             approved_count: a.approved_count ?? null,
