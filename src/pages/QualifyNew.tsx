@@ -589,8 +589,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         cost_comparison: savedCostComparison,
       } as any);
 
-      if (appErr || !applicant) throw appErr || new Error('Failed to create applicant');
-      const appId = applicant.id;
 
       await supabase.from('property_details').insert({
         applicant_id: appId,
