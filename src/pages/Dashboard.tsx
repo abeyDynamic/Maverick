@@ -130,21 +130,10 @@ export default function Dashboard() {
                           {q.loan_amount != null && (
                             <span>AED {formatCurrency(q.loan_amount)}</span>
                           )}
-                          {q.dbr_pct != null && (
-                            <span>DBR: <strong className="text-foreground">{Number(q.dbr_pct).toFixed(1)}%</strong></span>
+                          {q.dbr_percent != null && (
+                            <span>DBR: <strong className="text-foreground">{Number(q.dbr_percent).toFixed(1)}%</strong></span>
                           )}
-                          {q.approved_count != null && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                              {q.approved_count} approved
-                            </Badge>
-                          )}
-                          {q.top_bank && (
-                            <span className="flex items-center gap-1">
-                              <Trophy className="h-3 w-3 text-yellow-500" />
-                              <strong className="text-foreground">{q.top_bank}</strong>
-                            </span>
-                          )}
-                          <span>{new Date(q.created_at).toLocaleDateString()}</span>
+                          <span>{new Date(q.saved_at).toLocaleDateString()}</span>
                         </div>
                       </div>
                     </div>
