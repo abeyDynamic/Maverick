@@ -670,29 +670,50 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
     setSaving(true);
     try {
-      // Build saved results JSONB
       const savedBankResults = buildSavedBankResults();
       const savedCostComparison = buildSavedCostComparison();
-      // Use the first bank's DBR as a representative DBR
       const representativeDbr = savedBankResults.length > 0 ? savedBankResults[0].dbr_percent : null;
 
-      const { data: applicant, error: appErr } = await supabase
-        .from('applicants')
-        .insert({
-          user_id: user.id,
+      let appId: string;
+
+      if (editApplicantId) {
+        // Update existing applicant
+        appId = editApplicantId;
+        await supabase.from('applicants').update({
           full_name: clientName || null,
           residency_status: residency,
           nationality,
           date_of_birth: dob ? format(dob, 'yyyy-MM-dd') : null,
           employment_type: empType || null,
-        } as any)
-        .select('id')
-        .single();
+        } as any).eq('id', appId);
 
-      if (appErr || !applicant) throw appErr || new Error('Failed to create applicant');
-      const appId = applicant.id;
+        // Delete old related records and re-insert
+        await Promise.all([
+          supabase.from('property_details').delete().eq('applicant_id', appId),
+          supabase.from('income_fields').delete().eq('applicant_id', appId),
+          supabase.from('liability_fields').delete().eq('applicant_id', appId),
+          supabase.from('co_borrowers').delete().eq('applicant_id', appId),
+        ]);
+      } else {
+        // Create new applicant
+        const { data: applicant, error: appErr } = await supabase
+          .from('applicants')
+          .insert({
+            user_id: user.id,
+            full_name: clientName || null,
+            residency_status: residency,
+            nationality,
+            date_of_birth: dob ? format(dob, 'yyyy-MM-dd') : null,
+            employment_type: empType || null,
+          } as any)
+          .select('id')
+          .single();
 
-      // Save qualification results to separate table
+        if (appErr || !applicant) throw appErr || new Error('Failed to create applicant');
+        appId = applicant.id;
+      }
+
+      // Always insert a new qualification_results snapshot
       await supabase.from('qualification_results').insert({
         applicant_id: appId,
         loan_amount: loanAmount || null,
@@ -700,7 +721,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         bank_results: savedBankResults,
         cost_comparison: savedCostComparison,
       } as any);
-
 
       await supabase.from('property_details').insert({
         applicant_id: appId,
