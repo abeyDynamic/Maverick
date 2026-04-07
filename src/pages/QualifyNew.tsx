@@ -19,6 +19,7 @@ import { IncomeFieldCard, IncomeEntry, createIncomeEntry } from '@/components/qu
 import { LiabilityFieldCard, LiabilityEntry, createLiabilityEntry } from '@/components/qualify/LiabilityFieldCard';
 import { CoBorrowerSection, CoBorrowerData, createCoBorrower } from '@/components/qualify/CoBorrowerSection';
 import DBRSummaryBar from '@/components/results/DBRSummaryBar';
+import EiborPanel from '@/components/qualify/EiborPanel';
 import BankEligibilityTable, { useBankResults, buildWhatIfAnalysis } from '@/components/results/BankEligibilityTable';
 import WhatIfChat from '@/components/results/WhatIfChat';
 import CostBreakdownSection, { type ProductData } from '@/components/results/CostBreakdownSection';
@@ -1053,6 +1054,9 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
             {clientName && (
               <p className="text-sm font-semibold text-primary">{clientName}</p>
             )}
+
+            {/* EIBOR Panel */}
+            <EiborPanel />
 
             {/* Session Reminders — global notes above DBR bar */}
             <SessionRemindersPanel
