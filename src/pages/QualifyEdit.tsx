@@ -39,11 +39,10 @@ interface SavedCostEntry {
 interface SavedData {
   id: string;
   full_name: string | null;
-  created_at: string;
+  saved_at: string;
   bank_results: SavedBankResult[] | null;
   cost_comparison: SavedCostEntry[] | null;
-  dbr_pct: number | null;
-  approved_count: number | null;
+  dbr_percent: number | null;
   property_value: number | null;
   loan_amount: number | null;
   ltv: number | null;
