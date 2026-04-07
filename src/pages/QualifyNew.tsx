@@ -787,7 +787,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
           <Button variant="ghost" size="sm" className="text-primary-foreground hover:bg-primary/80" onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h1 className="text-lg font-semibold">New Qualification</h1>
+          <h1 className="text-lg font-semibold">{editApplicantId ? 'Edit Qualification' : 'New Qualification'}</h1>
         </div>
       </header>
 
