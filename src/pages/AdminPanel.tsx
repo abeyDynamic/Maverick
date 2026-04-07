@@ -20,6 +20,7 @@ export default function AdminPanel() {
         </div>
       </header>
       <GlobalEiborBar />
+      <main className="container mx-auto px-6 py-8">
         <Tabs defaultValue="eibor">
           <TabsList className="mb-6">
             <TabsTrigger value="banks">Banks</TabsTrigger>
