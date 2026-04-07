@@ -86,6 +86,17 @@ function toNullableNumber(value: unknown): number | null {
   return null;
 }
 
+/** Normalize processing fee to a percentage value (e.g. 1 for 1%).
+ *  Handles: decimal form (0.01 → 1%), percentage form (1 → 1%), absurd values (>10 → null) */
+function normalizeProcessingFeePercent(value: number | null): number | null {
+  if (value === null) return null;
+  // If stored as decimal (e.g. 0.01 for 1%), convert to percentage
+  if (value > 0 && value < 0.5) return value * 100;
+  // If clearly unreasonable (>10%), likely a flat fee or data error — ignore
+  if (value > 10) return null;
+  return value;
+}
+
 /** Normalize product rate to annual decimal form (e.g. 0.0399 stays 0.0399, 3.99 becomes 0.0399) */
 function normalizeRateToDecimal(rate: number | null): number | null {
   if (rate === null) return null;
