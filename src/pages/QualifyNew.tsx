@@ -473,6 +473,83 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     if (val !== 'abu_dhabi') setIsAlAin(false);
   }
 
+  // Helper: build serializable bank_results JSONB
+  function buildSavedBankResults() {
+    return bankResults.map(r => {
+      const product = productsByBank[r.bank.id];
+      const noteCount = qualNotes.filter(n => n.bank_id === r.bank.id).length;
+      return {
+        bank_name: r.bank.bank_name,
+        stress_rate: r.stressRate,
+        monthly_emi: Math.round(r.stressEMI),
+        dbr_percent: Math.round(r.dbr * 10) / 10,
+        dbr_limit: r.dbrLimit,
+        min_salary_met: r.minSalaryMet,
+        eligible: r.eligible,
+        product_rate: product?.rate != null ? Math.round((product.rate as number) * 10000) / 100 : null,
+        fixed_period: product?.fixed_period ?? null,
+        qualification_notes_count: noteCount,
+      };
+    });
+  }
+
+  // Helper: build serializable cost_comparison JSONB
+  function buildSavedCostComparison() {
+    const approved = bankResults.filter(r => r.eligible);
+    if (approved.length === 0 || !loanAmount) return [];
+
+    const isDubaiAbuSharjah = ['dubai', 'abu_dhabi', 'sharjah'].includes(emirate);
+    const defaultValFee = isDubaiAbuSharjah ? 2500 : 3000;
+    const isDubai = emirate === 'dubai';
+
+    const calcEMI = (loan: number, annualRate: number, months: number) => {
+      if (!loan || !annualRate || !months) return 0;
+      const r = annualRate / 12;
+      if (r === 0) return loan / months;
+      return (loan * r * Math.pow(1 + r, months)) / (Math.pow(1 + r, months) - 1);
+    };
+
+    const entries = approved.map(r => {
+      const product = productsByBank[r.bank.id];
+      const usedRate = product?.rate ?? nominalRate / 100;
+      const lifeInsRate = product?.life_ins_monthly_percent ?? 0.00018;
+      const propInsRate = product?.prop_ins_annual_percent ?? 0.00035;
+      const processingFeePercent = product?.processing_fee_percent ?? 1;
+      const fixedMonths = product?.comparison_fixed_months ?? product?.fixed_period_months ?? 24;
+      const valFee = product?.valuation_fee ?? defaultValFee;
+
+      const emi = Math.round(calcEMI(loanAmount, usedRate, effectiveTenor));
+      const lifeIns = Math.round(loanAmount * lifeInsRate);
+      const propIns = Math.round((propertyValue * propInsRate) / 12);
+      const totalMonthly = emi + lifeIns + propIns;
+      const fixedPeriodTotal = totalMonthly * fixedMonths;
+
+      const dldFee = isDubai ? Math.round(propertyValue * 0.04 + 580) : 0;
+      const mortgageReg = Math.round(loanAmount * 0.0025 + 290);
+      const transferCentre = 4200;
+      const processingFeeAED = Math.round(loanAmount * processingFeePercent / 100);
+      const upfrontCosts = dldFee + mortgageReg + transferCentre + processingFeeAED + valFee;
+      const grandTotal = fixedPeriodTotal + upfrontCosts;
+
+      return {
+        bank_name: r.bank.bank_name,
+        nominal_rate: Math.round(usedRate * 10000) / 100,
+        monthly_emi: emi,
+        life_ins: lifeIns,
+        prop_ins: propIns,
+        total_monthly: totalMonthly,
+        fixed_period_total: fixedPeriodTotal,
+        upfront_costs: upfrontCosts,
+        grand_total: grandTotal,
+        rank: 0,
+      };
+    });
+
+    entries.sort((a, b) => a.fixed_period_total - b.fixed_period_total);
+    entries.forEach((e, i) => { e.rank = i; });
+    return entries;
+  }
+
   async function handleSave() {
     if (!user) return;
     if (!residency) { toast.error('Residency Status is required'); return; }
@@ -481,6 +558,13 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
     setSaving(true);
     try {
+      // Build saved results JSONB
+      const savedBankResults = buildSavedBankResults();
+      const savedCostComparison = buildSavedCostComparison();
+      const approvedCount = savedBankResults.filter(r => r.eligible).length;
+      // Use the first bank's DBR as a representative DBR
+      const representativeDbr = savedBankResults.length > 0 ? savedBankResults[0].dbr_percent : null;
+
       const { data: applicant, error: appErr } = await supabase
         .from('applicants')
         .insert({
@@ -490,6 +574,10 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
           nationality,
           date_of_birth: dob ? format(dob, 'yyyy-MM-dd') : null,
           employment_type: empType || null,
+          bank_results: savedBankResults,
+          cost_comparison: savedCostComparison,
+          dbr_pct: representativeDbr,
+          approved_count: approvedCount,
         } as any)
         .select('id')
         .single();
@@ -546,6 +634,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
       }
 
       toast.success('Qualification saved!');
+      navigate(`/qualify/${appId}`);
     } catch (e: any) {
       toast.error(e.message || 'Failed to save');
     } finally {
