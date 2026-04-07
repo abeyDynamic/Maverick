@@ -633,7 +633,8 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
       const usedRate = product?.rate ?? nominalRate / 100;
       const lifeInsRate = product?.life_ins_monthly_percent ?? 0.00018;
       const propInsRate = product?.prop_ins_annual_percent ?? 0.00035;
-      const processingFeePercent = product?.processing_fee_percent ?? 1;
+      const rawProcFee = product?.processing_fee_percent;
+      const processingFeePercent = (rawProcFee !== null && rawProcFee !== undefined && rawProcFee >= 0 && rawProcFee <= 10) ? rawProcFee : 1;
       const fixedMonths = product?.comparison_fixed_months ?? product?.fixed_period_months ?? 24;
       const valFee = product?.valuation_fee ?? defaultValFee;
 
