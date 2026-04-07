@@ -353,12 +353,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
       const map: Record<string, ProductData> = {};
       Object.entries(groupedProducts).forEach(([bankId, bankProducts]) => {
-        // Debug: log raw processing fee values
-        bankProducts.forEach(p => {
-          if (p.processing_fee_percent !== null || (p as any).processing_fee !== null) {
-            console.log(`[DEBUG] bank=${bankId} processing_fee_percent=${p.processing_fee_percent} processing_fee=${(p as any).processing_fee} rate=${p.rate}`);
-          }
-        });
         const selectedProduct = selectPreferredProduct(bankProducts, {
           applicantResidency,
           applicantSegment,
@@ -367,7 +361,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
           salaryTransfer,
         });
         if (selectedProduct) {
-          console.log(`[DEBUG] Selected for ${bankId}: processing_fee_percent=${selectedProduct.processing_fee_percent}`);
           map[bankId] = selectedProduct;
         }
       });
