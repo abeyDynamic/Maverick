@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, Edit, Printer, CheckCircle2, XCircle } from 'lucide-react';
-import GlobalEiborBar from '@/components/GlobalEiborBar';
+import GlobalTickerBar from '@/components/GlobalTickerBar';
 import { formatCurrency } from '@/lib/mortgage-utils';
 import { cn } from '@/lib/utils';
 import QualifyNew from './QualifyNew';

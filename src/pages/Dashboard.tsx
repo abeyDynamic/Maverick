@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { Plus, FileText, LogOut, Shield } from 'lucide-react';
 import { formatCurrency } from '@/lib/mortgage-utils';
-import GlobalEiborBar from '@/components/GlobalEiborBar';
+import GlobalTickerBar from '@/components/GlobalTickerBar';
 import DashboardEiborChart from '@/components/dashboard/DashboardEiborChart';
 
 interface QualRow {
