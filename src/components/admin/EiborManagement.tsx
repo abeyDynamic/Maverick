@@ -13,11 +13,11 @@ import { cn } from '@/lib/utils';
 
 const TENORS = [
   { key: 'overnight', label: 'Overnight', shortLabel: 'O/N', color: '#F97316' },
-  { key: 'one_week', label: '1 Week', shortLabel: '1W', color: '#06B6D4' },
-  { key: 'one_month', label: '1 Month', shortLabel: '1M', color: '#3B82F6' },
-  { key: 'three_months', label: '3 Months', shortLabel: '3M', color: '#22C55E' },
-  { key: 'six_months', label: '6 Months', shortLabel: '6M', color: '#A855F7' },
-  { key: 'one_year', label: '1 Year', shortLabel: '1Y', color: '#0A1F44' },
+  { key: 'w1', label: '1 Week', shortLabel: '1W', color: '#06B6D4' },
+  { key: 'm1', label: '1 Month', shortLabel: '1M', color: '#3B82F6' },
+  { key: 'm3', label: '3 Months', shortLabel: '3M', color: '#22C55E' },
+  { key: 'm6', label: '6 Months', shortLabel: '6M', color: '#A855F7' },
+  { key: 'y1', label: '1 Year', shortLabel: '1Y', color: '#0A1F44' },
 ] as const;
 
 type TenorKey = typeof TENORS[number]['key'];
