@@ -62,7 +62,7 @@ const ChartTooltip = ({ active, payload }: any) => {
 export default function DashboardEiborChart() {
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [range, setRange] = useState(6);
+  const [range, setRange] = useState(12);
   const [visibleLines, setVisibleLines] = useState<Record<TenorKey, boolean>>(
     Object.fromEntries(TENORS.map(t => [t.key, true])) as Record<TenorKey, boolean>
   );

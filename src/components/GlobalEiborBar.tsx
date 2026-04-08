@@ -49,19 +49,17 @@ export default function GlobalEiborBar() {
   }, []);
 
   return (
-    <div className="w-full" style={{ backgroundColor: '#1A4B8C', fontSize: '12px', color: 'white' }}>
-      <div className="container mx-auto px-6 py-1">
-        {latest ? (
-          <p className="truncate font-mono">
-            EIBOR {format(parseISO(latest.fixing_date), 'dd/MM/yyyy')}
-            {TENORS.map(t => (
-              <span key={t.key}>{' | '}{t.label}: {fmtRate(latest[t.key])}</span>
-            ))}
-          </p>
-        ) : (
-          <p>EIBOR rates not loaded — update in admin panel</p>
-        )}
-      </div>
+    <div className="w-full print-hide" style={{ backgroundColor: '#1A4B8C', fontSize: '11px', color: 'white', padding: '4px 16px' }}>
+      {latest ? (
+        <p className="truncate font-mono">
+          EIBOR {format(parseISO(latest.fixing_date), 'dd/MM/yyyy')}
+          {TENORS.map(t => (
+            <span key={t.key}>{' | '}{t.label}: {fmtRate(latest[t.key])}</span>
+          ))}
+        </p>
+      ) : (
+        <p>EIBOR rates not loaded</p>
+      )}
     </div>
   );
 }

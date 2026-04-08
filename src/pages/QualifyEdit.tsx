@@ -156,6 +156,7 @@ export default function QualifyEdit() {
           <h1 className="text-xl font-semibold">Saved Results — {savedData.full_name || 'Unnamed Client'}</h1>
         </div>
       </header>
+      <GlobalEiborBar />
 
       {/* Print-only header */}
       <div className="hidden print-show px-6 pt-4 pb-2">
