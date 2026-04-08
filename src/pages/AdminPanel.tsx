@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft } from 'lucide-react';
 import EiborManagement from '@/components/admin/EiborManagement';
 import TickerManagement from '@/components/admin/TickerManagement';
+import BankManagement from '@/components/admin/BankManagement';
 import GlobalTickerBar from '@/components/GlobalTickerBar';
 
 export default function AdminPanel() {
@@ -32,7 +33,7 @@ export default function AdminPanel() {
             <TabsTrigger value="version">Version Log</TabsTrigger>
           </TabsList>
           <TabsContent value="banks">
-            <Card className="bg-background"><CardHeader><CardTitle>Bank Management</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Bank management coming soon.</p></CardContent></Card>
+            <BankManagement />
           </TabsContent>
           <TabsContent value="products">
             <Card className="bg-background"><CardHeader><CardTitle>Product Management</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Product management coming soon.</p></CardContent></Card>
