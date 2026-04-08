@@ -41,11 +41,11 @@ export default function EiborManagement() {
       setLatestDate(row.fixing_date);
       setFormValues({
         overnight: row.overnight != null ? String(row.overnight) : '',
-        one_week: row.one_week != null ? String(row.one_week) : '',
-        one_month: row.one_month != null ? String(row.one_month) : '',
-        three_months: row.three_months != null ? String(row.three_months) : '',
-        six_months: row.six_months != null ? String(row.six_months) : '',
-        one_year: row.one_year != null ? String(row.one_year) : '',
+        w1: row.w1 != null ? String(row.w1) : '',
+        m1: row.m1 != null ? String(row.m1) : '',
+        m3: row.m3 != null ? String(row.m3) : '',
+        m6: row.m6 != null ? String(row.m6) : '',
+        y1: row.y1 != null ? String(row.y1) : '',
       });
     }
   }, []);
