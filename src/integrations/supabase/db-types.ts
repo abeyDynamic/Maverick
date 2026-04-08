@@ -66,8 +66,8 @@ export interface Database {
       eibor_history: {
         Row: {
           id: string; fixing_date: string;
-          overnight: number | null; one_week: number | null; one_month: number | null;
-          three_months: number | null; six_months: number | null; one_year: number | null;
+          overnight: number | null; w1: number | null; m1: number | null;
+          m3: number | null; m6: number | null; y1: number | null;
           created_at: string;
         };
         Insert: Partial<Database['public']['Tables']['eibor_history']['Row']> & { fixing_date: string };
