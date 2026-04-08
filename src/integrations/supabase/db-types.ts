@@ -111,6 +111,12 @@ export interface Database {
           processing_fee_percent: number | null; valuation_fee: number | null;
           life_ins_monthly_percent: number | null; prop_ins_annual_percent: number | null;
           early_settlement_fee: string | null; active: boolean;
+          salary_transfer: boolean; residency: string | null;
+          eibor_benchmark: string | null; stress_rate: number | null;
+          partial_settlement: string | null; key_points: string | null;
+          status: string; validity_end: string | null;
+          created_at: string; fixed_period: string | null;
+          processing_fee: number | null;
         };
         Insert: Partial<Database['public']['Tables']['products']['Row']> & { bank_id: string };
         Update: Partial<Database['public']['Tables']['products']['Row']>;
