@@ -6,6 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 import EiborManagement from '@/components/admin/EiborManagement';
 import TickerManagement from '@/components/admin/TickerManagement';
 import BankManagement from '@/components/admin/BankManagement';
+import ProductManagement from '@/components/admin/ProductManagement';
 import GlobalTickerBar from '@/components/GlobalTickerBar';
 
 export default function AdminPanel() {
