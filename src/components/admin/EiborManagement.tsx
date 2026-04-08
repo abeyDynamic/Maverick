@@ -13,11 +13,11 @@ import { cn } from '@/lib/utils';
 
 const TENORS = [
   { key: 'overnight', label: 'Overnight', shortLabel: 'O/N', color: '#F97316' },
-  { key: 'one_week', label: '1 Week', shortLabel: '1W', color: '#06B6D4' },
-  { key: 'one_month', label: '1 Month', shortLabel: '1M', color: '#3B82F6' },
-  { key: 'three_months', label: '3 Months', shortLabel: '3M', color: '#22C55E' },
-  { key: 'six_months', label: '6 Months', shortLabel: '6M', color: '#A855F7' },
-  { key: 'one_year', label: '1 Year', shortLabel: '1Y', color: '#0A1F44' },
+  { key: 'w1', label: '1 Week', shortLabel: '1W', color: '#06B6D4' },
+  { key: 'm1', label: '1 Month', shortLabel: '1M', color: '#3B82F6' },
+  { key: 'm3', label: '3 Months', shortLabel: '3M', color: '#22C55E' },
+  { key: 'm6', label: '6 Months', shortLabel: '6M', color: '#A855F7' },
+  { key: 'y1', label: '1 Year', shortLabel: '1Y', color: '#0A1F44' },
 ] as const;
 
 type TenorKey = typeof TENORS[number]['key'];
@@ -41,11 +41,11 @@ export default function EiborManagement() {
       setLatestDate(row.fixing_date);
       setFormValues({
         overnight: row.overnight != null ? String(row.overnight) : '',
-        one_week: row.one_week != null ? String(row.one_week) : '',
-        one_month: row.one_month != null ? String(row.one_month) : '',
-        three_months: row.three_months != null ? String(row.three_months) : '',
-        six_months: row.six_months != null ? String(row.six_months) : '',
-        one_year: row.one_year != null ? String(row.one_year) : '',
+        w1: row.w1 != null ? String(row.w1) : '',
+        m1: row.m1 != null ? String(row.m1) : '',
+        m3: row.m3 != null ? String(row.m3) : '',
+        m6: row.m6 != null ? String(row.m6) : '',
+        y1: row.y1 != null ? String(row.y1) : '',
       });
     }
   }, []);
@@ -79,9 +79,9 @@ export default function EiborManagement() {
 
     // Update eibor_rates for stress calculations
     const rateUpdates = [
-      { type: '1m', value: row.one_month },
-      { type: '3m', value: row.three_months },
-      { type: '6m', value: row.six_months },
+      { type: '1m', value: row.m1 },
+      { type: '3m', value: row.m3 },
+      { type: '6m', value: row.m6 },
     ].filter(r => r.value != null);
 
     for (const ru of rateUpdates) {
