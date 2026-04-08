@@ -106,6 +106,7 @@ export default function GlobalTickerBar() {
     const measure = () => {
       const halfWidth = inner.scrollWidth / 2;
       inner.style.setProperty('--scroll-width', `${halfWidth}px`);
+      inner.style.setProperty('--scroll-duration', `${halfWidth / 80}s`);
     };
     measure();
     const observer = new ResizeObserver(measure);
