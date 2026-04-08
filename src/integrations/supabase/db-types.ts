@@ -107,6 +107,15 @@ export interface Database {
         Insert: Partial<Database['public']['Tables']['products']['Row']> & { bank_id: string };
         Update: Partial<Database['public']['Tables']['products']['Row']>;
       };
+      ticker_updates: {
+        Row: {
+          id: string; content: string; category: string;
+          active: boolean; pinned: boolean;
+          created_at: string; created_by: string | null;
+        };
+        Insert: Partial<Database['public']['Tables']['ticker_updates']['Row']> & { content: string };
+        Update: Partial<Database['public']['Tables']['ticker_updates']['Row']>;
+      };
     };
   };
 }
