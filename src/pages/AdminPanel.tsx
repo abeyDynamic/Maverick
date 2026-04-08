@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft } from 'lucide-react';
 import EiborManagement from '@/components/admin/EiborManagement';
 import TickerManagement from '@/components/admin/TickerManagement';
+import BankManagement from '@/components/admin/BankManagement';
 import GlobalTickerBar from '@/components/GlobalTickerBar';
 
 export default function AdminPanel() {
