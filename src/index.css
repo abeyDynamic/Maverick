@@ -106,3 +106,14 @@ All colors MUST be HSL.
     font-size: 10px !important;
   }
 }
+
+/* Ticker scroll animation */
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(calc(-1 * var(--scroll-width, 50%))); }
+}
+
+.ticker-scroll {
+  animation: ticker-scroll linear infinite;
+  animation-duration: calc(var(--scroll-width, 2000px) / 80 * 1s);
+}
