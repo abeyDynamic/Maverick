@@ -58,9 +58,10 @@ export default function TickerManagement() {
   const handleAdd = async () => {
     if (!newContent.trim()) { toast.error('Enter update content'); return; }
     setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase
       .from('ticker_updates')
-      .insert({ content: newContent.trim(), category: newCategory, pinned: newPinned });
+      .insert({ content: newContent.trim(), category: newCategory, pinned: newPinned, active: true, created_by: user?.id });
     if (error) { toast.error('Failed to add update'); console.error(error); }
     else { toast.success('Ticker update added'); setNewContent(''); setNewPinned(false); }
     setSaving(false);
