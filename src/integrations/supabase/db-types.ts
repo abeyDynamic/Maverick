@@ -19,10 +19,18 @@ export interface Database {
           id: string; bank_name: string; short_code: string | null; active: boolean;
           mortgage_types: string[]; base_stress_rate: number | null; stress_eibor_tenor: string | null;
           min_loan_amount: number; max_loan_amount: number | null; min_salary: number;
-          dbr_limit: number; max_tenor_months: number;
+          dbr_limit: number; max_tenor_months: number; max_ltv: number | null;
         };
         Insert: Partial<Database['public']['Tables']['banks']['Row']> & { bank_name: string };
         Update: Partial<Database['public']['Tables']['banks']['Row']>;
+      };
+      version_log: {
+        Row: {
+          id: string; table_name: string; record_id: string; action: string;
+          changed_by: string | null; details: Json | null; changed_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['version_log']['Row']> & { table_name: string; record_id: string };
+        Update: Partial<Database['public']['Tables']['version_log']['Row']>;
       };
       applicants: {
         Row: {

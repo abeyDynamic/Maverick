@@ -33,7 +33,7 @@ export default function AdminPanel() {
             <TabsTrigger value="version">Version Log</TabsTrigger>
           </TabsList>
           <TabsContent value="banks">
-            <Card className="bg-background"><CardHeader><CardTitle>Bank Management</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Bank management coming soon.</p></CardContent></Card>
+            <BankManagement />
           </TabsContent>
           <TabsContent value="products">
             <Card className="bg-background"><CardHeader><CardTitle>Product Management</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Product management coming soon.</p></CardContent></Card>
