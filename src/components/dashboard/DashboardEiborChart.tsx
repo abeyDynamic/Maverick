@@ -62,7 +62,7 @@ const ChartTooltip = ({ active, payload }: any) => {
 export default function DashboardEiborChart() {
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [range, setRange] = useState(6);
+  const [range, setRange] = useState(12);
   const [visibleLines, setVisibleLines] = useState<Record<TenorKey, boolean>>(
     Object.fromEntries(TENORS.map(t => [t.key, true])) as Record<TenorKey, boolean>
   );
@@ -104,7 +104,7 @@ export default function DashboardEiborChart() {
       <Card className="bg-background">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-lg text-primary">EIBOR Rates</CardTitle>
+            <CardTitle className="text-lg text-primary">EIBOR Rate History</CardTitle>
             <div className="flex gap-1">
               {TIME_RANGES.map(tr => (
                 <Button

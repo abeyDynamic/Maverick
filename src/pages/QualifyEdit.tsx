@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, Edit, Printer, CheckCircle2, XCircle } from 'lucide-react';
+import GlobalEiborBar from '@/components/GlobalEiborBar';
 import { formatCurrency } from '@/lib/mortgage-utils';
 import { cn } from '@/lib/utils';
 import QualifyNew from './QualifyNew';
@@ -155,6 +156,7 @@ export default function QualifyEdit() {
           <h1 className="text-xl font-semibold">Saved Results — {savedData.full_name || 'Unnamed Client'}</h1>
         </div>
       </header>
+      <GlobalEiborBar />
 
       {/* Print-only header */}
       <div className="hidden print-show px-6 pt-4 pb-2">
