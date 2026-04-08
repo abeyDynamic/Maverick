@@ -104,7 +104,7 @@ export default function DashboardEiborChart() {
       <Card className="bg-background">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-lg text-primary">EIBOR Rates</CardTitle>
+            <CardTitle className="text-lg text-primary">EIBOR Rate History</CardTitle>
             <div className="flex gap-1">
               {TIME_RANGES.map(tr => (
                 <Button
