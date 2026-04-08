@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { Plus, FileText, LogOut, Shield } from 'lucide-react';
 import { formatCurrency } from '@/lib/mortgage-utils';
-import GlobalEiborBar from '@/components/GlobalEiborBar';
+import GlobalTickerBar from '@/components/GlobalTickerBar';
 import DashboardEiborChart from '@/components/dashboard/DashboardEiborChart';
 
 interface QualRow {
@@ -76,7 +76,7 @@ export default function Dashboard() {
           </div>
         </div>
       </header>
-      <GlobalEiborBar />
+      <GlobalTickerBar />
 
       <main className="container mx-auto px-6 py-8">
         <div className="mb-8 flex items-center justify-between">

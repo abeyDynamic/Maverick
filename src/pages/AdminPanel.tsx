@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft } from 'lucide-react';
 import EiborManagement from '@/components/admin/EiborManagement';
-import GlobalEiborBar from '@/components/GlobalEiborBar';
+import TickerManagement from '@/components/admin/TickerManagement';
+import GlobalTickerBar from '@/components/GlobalTickerBar';
 
 export default function AdminPanel() {
   const navigate = useNavigate();
@@ -19,13 +20,14 @@ export default function AdminPanel() {
           <h1 className="text-xl font-semibold">Admin Panel</h1>
         </div>
       </header>
-      <GlobalEiborBar />
+      <GlobalTickerBar />
       <main className="container mx-auto px-6 py-8">
         <Tabs defaultValue="eibor">
           <TabsList className="mb-6">
             <TabsTrigger value="banks">Banks</TabsTrigger>
             <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="eibor">EIBOR Rates</TabsTrigger>
+            <TabsTrigger value="ticker">Ticker</TabsTrigger>
             <TabsTrigger value="notes">Qualification Notes</TabsTrigger>
             <TabsTrigger value="version">Version Log</TabsTrigger>
           </TabsList>
@@ -37,6 +39,9 @@ export default function AdminPanel() {
           </TabsContent>
           <TabsContent value="eibor">
             <EiborManagement />
+          </TabsContent>
+          <TabsContent value="ticker">
+            <TickerManagement />
           </TabsContent>
           <TabsContent value="notes">
             <Card className="bg-background"><CardHeader><CardTitle>Qualification Notes</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Qualification notes management coming soon.</p></CardContent></Card>
