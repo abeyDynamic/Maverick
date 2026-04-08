@@ -79,9 +79,9 @@ export default function EiborManagement() {
 
     // Update eibor_rates for stress calculations
     const rateUpdates = [
-      { type: '1m', value: row.one_month },
-      { type: '3m', value: row.three_months },
-      { type: '6m', value: row.six_months },
+      { type: '1m', value: row.m1 },
+      { type: '3m', value: row.m3 },
+      { type: '6m', value: row.m6 },
     ].filter(r => r.value != null);
 
     for (const ru of rateUpdates) {
