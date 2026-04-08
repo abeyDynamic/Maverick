@@ -37,7 +37,7 @@ export default function AdminPanel() {
             <BankManagement />
           </TabsContent>
           <TabsContent value="products">
-            <Card className="bg-background"><CardHeader><CardTitle>Product Management</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Product management coming soon.</p></CardContent></Card>
+            <ProductManagement />
           </TabsContent>
           <TabsContent value="eibor">
             <EiborManagement />
