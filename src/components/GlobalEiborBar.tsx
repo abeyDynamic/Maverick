@@ -4,21 +4,21 @@ import { format, parseISO } from 'date-fns';
 
 const TENORS = [
   { key: 'overnight', label: 'O/N' },
-  { key: 'one_week', label: '1W' },
-  { key: 'one_month', label: '1M' },
-  { key: 'three_months', label: '3M' },
-  { key: 'six_months', label: '6M' },
-  { key: 'one_year', label: '1Y' },
+  { key: 'w1', label: '1W' },
+  { key: 'm1', label: '1M' },
+  { key: 'm3', label: '3M' },
+  { key: 'm6', label: '6M' },
+  { key: 'y1', label: '1Y' },
 ] as const;
 
 interface LatestRow {
   fixing_date: string;
   overnight: number | null;
-  one_week: number | null;
-  one_month: number | null;
-  three_months: number | null;
-  six_months: number | null;
-  one_year: number | null;
+  w1: number | null;
+  m1: number | null;
+  m3: number | null;
+  m6: number | null;
+  y1: number | null;
 }
 
 const fmtRate = (v: number | null) => v != null ? `${Number(v).toFixed(5)}%` : '—';
