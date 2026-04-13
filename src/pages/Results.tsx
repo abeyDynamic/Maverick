@@ -1,24 +1,24 @@
-import { useEffect, useState, useMemo, Fragment } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import GlobalTickerBar from '@/components/GlobalTickerBar';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowLeft, Edit } from 'lucide-react';
-import { calculateStressEMI, formatCurrency, isLimitType, normalizeToMonthly } from '@/lib/mortgage-utils';
+import { formatCurrency } from '@/lib/mortgage-utils';
 import WhatIfChat from '@/components/results/WhatIfChat';
-import BankEligibilityTable, { useBankResults, buildWhatIfAnalysis } from '@/components/results/BankEligibilityTable';
-
-interface Bank {
-  id: string;
-  bank_name: string;
-  base_stress_rate: number | null;
-  min_salary: number;
-  dbr_limit: number;
-  max_tenor_months: number;
-  min_loan_amount: number;
-  max_loan_amount: number | null;
-}
+import BankEligibilityTable from '@/components/results/BankEligibilityTable';
+import type { QualNote } from '@/components/results/BankEligibilityTable';
+import {
+  toBankFromRow,
+  calcTotalIncome,
+  calcTotalLiabilities,
+  runStage1,
+  buildWhatIfAnalysis,
+  type CaseBank,
+  type CaseIncomeField,
+  type CaseLiabilityField,
+} from '@/lib/case';
 
 interface Applicant {
   id: string;
@@ -38,42 +38,24 @@ interface PropertyDetail {
   nominal_rate: number;
 }
 
-interface IncomeField {
-  income_type: string;
-  amount: number;
-  percent_considered: number;
-  recurrence: string;
+function dbIncomeToEngine(rows: any[]): CaseIncomeField[] {
+  return rows.map(f => ({
+    incomeType: f.income_type,
+    amount: f.amount,
+    percentConsidered: f.percent_considered,
+    recurrence: f.recurrence,
+  }));
 }
 
-interface LiabilityField {
-  liability_type: string;
-  amount: number;
-  credit_card_limit: number | null;
-  recurrence: string;
-  closed_before_application: boolean;
-}
-
-interface QualNote {
-  bank_id: string | null;
-  field_name: string;
-  official_value: string | null;
-  practical_value: string | null;
-  note_text: string;
-  segment: string | null;
-}
-
-function calcTotalIncome(fields: IncomeField[]): number {
-  return fields.reduce((sum, f) => {
-    return sum + normalizeToMonthly(f.amount * f.percent_considered / 100, f.recurrence);
-  }, 0);
-}
-
-function calcTotalLiabilities(fields: LiabilityField[]): number {
-  return fields.reduce((sum, f) => {
-    if (f.closed_before_application) return sum;
-    if (isLimitType(f.liability_type)) return sum + (f.credit_card_limit ?? 0) * 0.05;
-    return sum + normalizeToMonthly(f.amount, f.recurrence);
-  }, 0);
+function dbLiabilityToEngine(rows: any[]): CaseLiabilityField[] {
+  return rows.map(f => ({
+    liabilityType: f.liability_type,
+    amount: f.amount,
+    creditCardLimit: f.credit_card_limit ?? 0,
+    recurrence: f.recurrence,
+    closedBeforeApplication: f.closed_before_application ?? false,
+    liabilityLetterObtained: f.liability_letter_obtained ?? false,
+  }));
 }
 
 export default function Results() {
@@ -83,9 +65,9 @@ export default function Results() {
   const [loading, setLoading] = useState(true);
   const [applicant, setApplicant] = useState<Applicant | null>(null);
   const [property, setProperty] = useState<PropertyDetail | null>(null);
-  const [incomeFields, setIncomeFields] = useState<IncomeField[]>([]);
-  const [liabilityFields, setLiabilityFields] = useState<LiabilityField[]>([]);
-  const [banks, setBanks] = useState<Bank[]>([]);
+  const [incomeFields, setIncomeFields] = useState<CaseIncomeField[]>([]);
+  const [liabilityFields, setLiabilityFields] = useState<CaseLiabilityField[]>([]);
+  const [banks, setBanks] = useState<CaseBank[]>([]);
   const [qualNotes, setQualNotes] = useState<QualNote[]>([]);
 
   useEffect(() => {
@@ -102,9 +84,9 @@ export default function Results() {
       ]);
       setApplicant(appRes.data as any);
       setProperty(propRes.data as any);
-      setIncomeFields((incRes.data ?? []) as any);
-      setLiabilityFields((liabRes.data ?? []) as any);
-      setBanks((bankRes.data ?? []) as any);
+      setIncomeFields(dbIncomeToEngine(incRes.data ?? []));
+      setLiabilityFields(dbLiabilityToEngine(liabRes.data ?? []));
+      setBanks((bankRes.data ?? []).map(toBankFromRow));
       setQualNotes((notesRes.data ?? []) as any);
       setLoading(false);
     }
@@ -118,11 +100,22 @@ export default function Results() {
   const tenorMonths = property?.preferred_tenor_months ?? 300;
   const ltv = property?.ltv ?? 0;
 
-  const bankResults = useBankResults(banks, totalIncome, totalLiabilities, loanAmount, tenorMonths, property?.stress_rate ?? 0);
+  const bankResults = useMemo(
+    () => runStage1(banks, totalIncome, totalLiabilities, loanAmount, tenorMonths, property?.stress_rate ?? 0),
+    [banks, totalIncome, totalLiabilities, loanAmount, tenorMonths, property?.stress_rate]
+  );
 
-  const whatIfAnalysis = useMemo(() => {
-    return buildWhatIfAnalysis(bankResults, totalIncome, totalLiabilities, liabilityFields as any);
-  }, [bankResults, totalIncome, totalLiabilities, liabilityFields]);
+  const whatIfAnalysis = useMemo(
+    () => buildWhatIfAnalysis(bankResults, totalIncome, totalLiabilities, liabilityFields),
+    [bankResults, totalIncome, totalLiabilities, liabilityFields]
+  );
+
+  // Legacy bank format for BankEligibilityTable component
+  const legacyBanks = useMemo(() => banks.map(b => ({
+    id: b.id, bank_name: b.bankName, base_stress_rate: b.baseStressRate,
+    min_salary: b.minSalary, dbr_limit: b.dbrLimit, max_tenor_months: b.maxTenorMonths,
+    min_loan_amount: b.minLoanAmount, max_loan_amount: b.maxLoanAmount,
+  })), [banks]);
 
   if (loading) {
     return (
@@ -177,7 +170,7 @@ export default function Results() {
         <div className="flex gap-6 items-start">
           <div className="w-full lg:w-[65%]">
             <BankEligibilityTable
-              banks={banks}
+              banks={legacyBanks}
               qualNotes={qualNotes}
               totalIncome={totalIncome}
               totalLiabilities={totalLiabilities}
