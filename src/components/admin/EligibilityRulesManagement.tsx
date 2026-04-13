@@ -277,7 +277,7 @@ export default function EligibilityRulesManagement() {
               <Select value={form.employment_subtype ?? ''} onValueChange={v => setForm(p => ({ ...p, employment_subtype: v || null }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="__none__">Any</SelectItem>
                   {EMPLOYMENT_SUBTYPES.filter(Boolean).map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -287,7 +287,7 @@ export default function EligibilityRulesManagement() {
               <Select value={form.doc_path ?? ''} onValueChange={v => setForm(p => ({ ...p, doc_path: v || null }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="__none__">Any</SelectItem>
                   {DOC_PATHS.filter(Boolean).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -297,7 +297,7 @@ export default function EligibilityRulesManagement() {
               <Select value={form.route_type ?? ''} onValueChange={v => setForm(p => ({ ...p, route_type: v || null }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="__none__">Any</SelectItem>
                   {ROUTE_TYPES.filter(Boolean).map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
                 </SelectContent>
               </Select>

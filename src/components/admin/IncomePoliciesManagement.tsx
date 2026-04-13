@@ -238,7 +238,7 @@ export default function IncomePoliciesManagement() {
               <Label className="text-xs">Averaging Method</Label>
               <Select value={form.averaging_method ?? ''} onValueChange={v => setForm(p => ({ ...p, averaging_method: v || null }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="None" /></SelectTrigger>
-                <SelectContent><SelectItem value="">None</SelectItem>{AVERAGING_METHODS.filter(Boolean).map(m => <SelectItem key={m} value={m}>{m.replace(/_/g, ' ')}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value="__none__">None</SelectItem>{AVERAGING_METHODS.filter(Boolean).map(m => <SelectItem key={m} value={m}>{m.replace(/_/g, ' ')}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
@@ -250,7 +250,7 @@ export default function IncomePoliciesManagement() {
               <Select value={form.employment_subtype ?? ''} onValueChange={v => setForm(p => ({ ...p, employment_subtype: v || null }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="__none__">Any</SelectItem>
                   {EMPLOYMENT_SUBTYPES.map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -260,7 +260,7 @@ export default function IncomePoliciesManagement() {
               <Select value={form.doc_path ?? ''} onValueChange={v => setForm(p => ({ ...p, doc_path: v || null }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="__none__">Any</SelectItem>
                   {DOC_PATHS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -270,7 +270,7 @@ export default function IncomePoliciesManagement() {
               <Select value={form.route_type ?? ''} onValueChange={v => setForm(p => ({ ...p, route_type: v || null }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="__none__">Any</SelectItem>
                   {ROUTE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                 </SelectContent>
               </Select>
