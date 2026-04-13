@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/mortgage-utils';
 import { cn } from '@/lib/utils';
-import type { BankResult } from './BankEligibilityTable';
+import type { CaseBankResult } from '@/lib/case/stage1-engine';
 
 export interface ProductData {
   bank_id: string;
@@ -23,7 +23,7 @@ export interface ProductData {
 }
 
 interface Props {
-  bankResults: BankResult[];
+  bankResults: CaseBankResult[];
   loanAmount: number;
   propertyValue: number;
   nominalRate: number;
@@ -33,7 +33,7 @@ interface Props {
 }
 
 interface BankCosts {
-  bank: BankResult;
+  bank: CaseBankResult;
   usedRate: number;
   displayRatePercent: number;
   rateLabel: string;
@@ -186,7 +186,7 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
               <TableHead className="text-xs min-w-[200px] sticky left-0 bg-background z-10"> </TableHead>
               {costs.map(c => (
                 <TableHead key={c.bank.bank.id} className="text-xs text-center min-w-[160px]">
-                  <div className="font-semibold">{c.bank.bank.bank_name}</div>
+                  <div className="font-semibold">{c.bank.bank.bankName}</div>
                   <div className="text-[9px] text-muted-foreground font-normal mt-0.5">{c.rateLabel}</div>
                 </TableHead>
               ))}
