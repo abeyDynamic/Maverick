@@ -7,22 +7,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { calculateStressEMI, formatCurrency, isLimitType, normalizeToMonthly } from '@/lib/mortgage-utils';
+import { formatCurrency } from '@/lib/mortgage-utils';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { runPolicyChecks, getStage2Summary, type PolicyTerm, type PolicyCheckResult } from '@/lib/policy-checks';
-import type { LiabilityEntry } from '@/components/qualify/LiabilityFieldCard';
-
-interface Bank {
-  id: string;
-  bank_name: string;
-  base_stress_rate: number | null;
-  min_salary: number;
-  dbr_limit: number;
-  max_tenor_months: number;
-  min_loan_amount: number;
-  max_loan_amount: number | null;
-}
+import { formatDbrLimit, getDeclineReasons, type CaseBankResult } from '@/lib/case/stage1-engine';
 
 export interface QualNote {
   bank_id: string | null;
@@ -31,17 +20,6 @@ export interface QualNote {
   practical_value: string | null;
   note_text: string;
   segment: string | null;
-}
-
-export interface BankResult {
-  bank: Bank;
-  stressRate: number;
-  stressEMI: number;
-  dbr: number;
-  dbrLimit: number;
-  minSalaryMet: boolean;
-  dbrMet: boolean;
-  eligible: boolean;
 }
 
 const WARNING_KEYWORDS = /restrict|not accepted|excluded|difficult|required|cannot|must not|check/i;
@@ -77,22 +55,6 @@ function NoteCategoryIcon({ category }: { category: NoteCategory }) {
     case 'info':
       return <Info className="h-3 w-3 text-blue-500 mt-0.5 shrink-0" />;
   }
-}
-
-function formatDbrLimit(val: number): string {
-  const rounded = Math.round(val * 100) / 100;
-  return rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(2);
-}
-
-function getDeclineReasons(r: BankResult, totalIncome: number): string[] {
-  const reasons: string[] = [];
-  if (!r.minSalaryMet) {
-    reasons.push(`Minimum salary AED ${formatCurrency(r.bank.min_salary)} not met, client income AED ${formatCurrency(totalIncome)}`);
-  }
-  if (!r.dbrMet) {
-    reasons.push(`DBR ${r.dbr.toFixed(1)}% exceeds bank limit of ${formatDbrLimit(r.dbrLimit)}%`);
-  }
-  return reasons;
 }
 
 function filterNotesBySegment(
@@ -151,7 +113,6 @@ export function SessionRemindersPanel({ notes, warningsOnly }: { notes: QualNote
 /* ── Bank Note Card (3-line format) ── */
 function BankNoteCard({ note }: { note: QualNote }) {
   const category = getNoteCategory(note);
-  const hasDetails = !!(note.official_value || note.practical_value);
 
   return (
     <div className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/15 border border-amber-200/60 dark:border-amber-800/40 rounded text-[11px]">
@@ -162,7 +123,7 @@ function BankNoteCard({ note }: { note: QualNote }) {
           {note.note_text && (
             <p className="mt-0.5 text-foreground leading-relaxed">{note.note_text}</p>
           )}
-          {hasDetails && (
+          {(note.official_value || note.practical_value) && (
             <p className="mt-0.5 text-[10px] text-muted-foreground">
               {note.official_value && <span>Official: {note.official_value}</span>}
               {note.official_value && note.practical_value && <span> | </span>}
@@ -210,91 +171,11 @@ function PolicyChecksGrid({ checks }: { checks: PolicyCheckResult[] }) {
   );
 }
 
-export function useBankResults(
-  banks: Bank[],
-  totalIncome: number,
-  totalLiabilities: number,
-  loanAmount: number,
-  tenorMonths: number,
-  stressRate: number
-): BankResult[] {
-  return useMemo(() => {
-    if (banks.length === 0 || !loanAmount) return [];
-
-    return banks.map(bank => {
-      const bankStressRate = (bank.base_stress_rate ?? stressRate / 100) * 100;
-      const stressEMI = calculateStressEMI(loanAmount, bankStressRate, tenorMonths);
-      const dbr = totalIncome > 0 ? ((stressEMI + totalLiabilities) / totalIncome) * 100 : 0;
-      const dbrLimit = Math.round(bank.dbr_limit * 10000) / 100;
-      const minSalaryMet = totalIncome >= bank.min_salary;
-      const dbrMet = dbr <= dbrLimit;
-      const eligible = dbrMet && minSalaryMet;
-
-      return { bank, stressRate: bankStressRate, stressEMI, dbr, dbrLimit, minSalaryMet, dbrMet, eligible };
-    }).sort((a, b) => {
-      if (a.eligible && !b.eligible) return -1;
-      if (!a.eligible && b.eligible) return 1;
-      if (a.eligible && b.eligible) return a.stressEMI - b.stressEMI;
-      const gapA = a.dbr - a.dbrLimit;
-      const gapB = b.dbr - b.dbrLimit;
-      return gapA - gapB;
-    });
-  }, [banks, totalIncome, totalLiabilities, loanAmount, tenorMonths, stressRate]);
-}
-
-export function buildWhatIfAnalysis(
-  bankResults: BankResult[],
-  totalIncome: number,
-  totalLiabilities: number,
-  liabilityFields: LiabilityEntry[]
-): string {
-  const ineligible = bankResults.filter(r => !r.eligible);
-  if (ineligible.length === 0) return '';
-
-  const lines: string[] = ['📊 What-If Analysis for Ineligible Banks\n'];
-
-  for (const r of ineligible) {
-    lines.push(`▸ ${r.bank.bank_name}`);
-
-    if (!r.minSalaryMet) {
-      const shortfall = r.bank.min_salary - totalIncome;
-      lines.push(`  Min salary requirement not met. Bank requires AED ${formatCurrency(r.bank.min_salary)} monthly. Client income is AED ${formatCurrency(totalIncome)}. Shortfall: AED ${formatCurrency(Math.round(shortfall))}.`);
-      if (!r.dbrMet) {
-        const excess = (r.stressEMI + totalLiabilities) - (r.dbrLimit / 100 * totalIncome);
-        lines.push(`  Additionally, DBR is ${r.dbr.toFixed(1)}% vs limit ${formatDbrLimit(r.dbrLimit)}%. Monthly liability reduction needed: AED ${formatCurrency(Math.round(Math.max(0, excess)))}.`);
-      }
-    } else {
-      const excess = (r.stressEMI + totalLiabilities) - (r.dbrLimit / 100 * totalIncome);
-      lines.push(`  Monthly liability reduction needed to qualify: AED ${formatCurrency(Math.round(Math.max(0, excess)))}`);
-
-      const hasCreditCard = liabilityFields.some(f => isLimitType(f.liability_type) && !f.closed_before_application);
-      const hasPersonalLoan = liabilityFields.some(f => f.liability_type.toLowerCase().includes('personal loan') && !f.closed_before_application);
-
-      if (hasCreditCard && excess > 0) {
-        const ccReduction = Math.ceil(excess / 0.05);
-        lines.push(`  → Question to ask client: Reducing credit card limit by AED ${formatCurrency(ccReduction)} would achieve this.`);
-      }
-      if (hasPersonalLoan) {
-        const plTotal = liabilityFields
-          .filter(f => f.liability_type.toLowerCase().includes('personal loan') && !f.closed_before_application)
-          .reduce((s, f) => s + normalizeToMonthly(f.amount, f.recurrence), 0);
-        lines.push(`  → Question to ask client: Closing personal loan(s) saves AED ${formatCurrency(Math.round(plTotal))}/month in liabilities.`);
-      }
-    }
-    lines.push('');
-  }
-
-  return lines.join('\n');
-}
-
 interface Props {
-  banks: Bank[];
+  bankResults: CaseBankResult[];
   qualNotes: QualNote[];
   totalIncome: number;
-  totalLiabilities: number;
   loanAmount: number;
-  tenorMonths: number;
-  stressRate: number;
   employmentType?: string;
   residencyStatus?: string;
   nationality?: string;
@@ -302,10 +183,9 @@ interface Props {
 }
 
 export default function BankEligibilityTable({
-  banks, qualNotes, totalIncome, totalLiabilities, loanAmount, tenorMonths, stressRate,
+  bankResults, qualNotes, totalIncome, loanAmount,
   employmentType = '', residencyStatus = '', nationality = '', emirate = ''
 }: Props) {
-  const bankResults = useBankResults(banks, totalIncome, totalLiabilities, loanAmount, tenorMonths, stressRate);
   const [warningsOnly, setWarningsOnly] = useState(false);
   const [expandedBanks, setExpandedBanks] = useState<Record<string, boolean>>({});
   const [policyTerms, setPolicyTerms] = useState<PolicyTerm[]>([]);
@@ -319,7 +199,7 @@ export default function BankEligibilityTable({
   useEffect(() => {
     if (bankResults.length === 0) return;
     async function fetchPolicies() {
-      const bankNames = bankResults.map(r => r.bank.bank_name);
+      const bankNames = bankResults.map(r => r.bank.bankName);
       const { data } = await supabase
         .from('policy_terms')
         .select('*')
@@ -335,8 +215,8 @@ export default function BankEligibilityTable({
   const policyChecksByBank = useMemo(() => {
     const map: Record<string, PolicyCheckResult[]> = {};
     for (const r of bankResults) {
-      const terms = policyTerms.filter(t => t.bank === r.bank.bank_name);
-      map[r.bank.id] = runPolicyChecks(terms, totalIncome, loanAmount, nationality, emirate, employmentType, r.bank.bank_name);
+      const terms = policyTerms.filter(t => t.bank === r.bank.bankName);
+      map[r.bank.id] = runPolicyChecks(terms, totalIncome, loanAmount, nationality, emirate, employmentType, r.bank.bankName);
     }
     return map;
   }, [bankResults, policyTerms, totalIncome, loanAmount, nationality, emirate, employmentType]);
@@ -444,7 +324,7 @@ export default function BankEligibilityTable({
                               ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
                               : <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
                           )}
-                          <span>{r.bank.bank_name}</span>
+                          <span>{r.bank.bankName}</span>
                           {noteCount > 0 && (
                             <Badge className={cn(
                               'text-white text-[9px] px-1 py-0 leading-tight',
