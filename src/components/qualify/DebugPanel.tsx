@@ -13,6 +13,13 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { normalizeToMonthly, isLimitType, formatCurrency } from '@/lib/mortgage-utils';
 import type { CaseIncomeField, CaseLiabilityField, CaseBankResult, Stage2BankDebugRow, QualSegment } from '@/lib/case';
 
+interface QualProfile {
+  segmentPath: string;
+  employmentSubtype: string;
+  docPath: string | null;
+  routeType: string;
+}
+
 interface DebugPanelProps {
   incomeFields: CaseIncomeField[];
   liabilityFields: CaseLiabilityField[];
@@ -29,13 +36,15 @@ interface DebugPanelProps {
   stage2DebugRows: Stage2BankDebugRow[];
   segment?: QualSegment | '';
   segmentRoute?: string;
+  qualProfile?: QualProfile;
+  routeExclusions?: Record<string, string>;
 }
 
 export default function DebugPanel({
   incomeFields, liabilityFields, totalIncome, totalLiabilities,
   loanAmount, stressRate, tenorMonths, bankResults,
   employmentType, residencyStatus, nationality, emirate,
-  stage2DebugRows, segment, segmentRoute,
+  stage2DebugRows, segment, segmentRoute, qualProfile, routeExclusions,
 }: DebugPanelProps) {
   const [visible, setVisible] = useState(false);
   const [incomeOpen, setIncomeOpen] = useState(true);
