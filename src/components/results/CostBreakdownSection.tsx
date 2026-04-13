@@ -186,7 +186,7 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
               <TableHead className="text-xs min-w-[200px] sticky left-0 bg-background z-10"> </TableHead>
               {costs.map(c => (
                 <TableHead key={c.bank.bank.id} className="text-xs text-center min-w-[160px]">
-                  <div className="font-semibold">{c.bank.bank.bank_name}</div>
+                  <div className="font-semibold">{c.bank.bank.bankName}</div>
                   <div className="text-[9px] text-muted-foreground font-normal mt-0.5">{c.rateLabel}</div>
                 </TableHead>
               ))}

@@ -305,37 +305,8 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   );
 
   // ── Legacy Bank interface adapter for components that still expect it ──
-  const legacyBanks = useMemo(() => banks.map(b => ({
-    id: b.id,
-    bank_name: b.bankName,
-    base_stress_rate: b.baseStressRate,
-    min_salary: b.minSalary,
-    dbr_limit: b.dbrLimit,
-    max_tenor_months: b.maxTenorMonths,
-    min_loan_amount: b.minLoanAmount,
-    max_loan_amount: b.maxLoanAmount,
-  })), [banks]);
-
-  // ── Legacy BankResult adapter for CostBreakdownSection ──
-  const legacyBankResults = useMemo(() => bankResults.map(r => ({
-    bank: {
-      id: r.bank.id,
-      bank_name: r.bank.bankName,
-      base_stress_rate: r.bank.baseStressRate,
-      min_salary: r.bank.minSalary,
-      dbr_limit: r.bank.dbrLimit,
-      max_tenor_months: r.bank.maxTenorMonths,
-      min_loan_amount: r.bank.minLoanAmount,
-      max_loan_amount: r.bank.maxLoanAmount,
-    },
-    stressRate: r.stressRate,
-    stressEMI: r.stressEMI,
-    dbr: r.dbr,
-    dbrLimit: r.dbrLimit,
-    minSalaryMet: r.minSalaryMet,
-    dbrMet: r.dbrMet,
-    eligible: r.eligible,
-  })), [bankResults]);
+  // Legacy Bank interface adapter for CostBreakdownSection — no longer needed,
+  // bankResults from the engine use CaseBank directly.
 
   function handleIncomeTypesChange(types: string[]) {
     setSelectedIncomeTypes(types);
@@ -711,20 +682,19 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
             {/* Bank Eligibility Table */}
             <BankEligibilityTable
-              banks={legacyBanks}
+              bankResults={bankResults}
               qualNotes={qualNotes}
               totalIncome={totalIncome}
-              totalLiabilities={totalLiabilities}
               loanAmount={loanAmount}
-              tenorMonths={effectiveTenor}
-              stressRate={stressRate}
               employmentType={empType}
               residencyStatus={residency}
+              nationality={nationality}
+              emirate={emirate}
             />
 
             {/* Cost Breakdown */}
             <CostBreakdownSection
-              bankResults={legacyBankResults}
+              bankResults={bankResults}
               loanAmount={loanAmount}
               propertyValue={propertyValue}
               nominalRate={nominalRate}
