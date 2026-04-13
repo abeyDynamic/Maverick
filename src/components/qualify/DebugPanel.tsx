@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Bug, ChevronDown, ChevronRight } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { normalizeToMonthly, isLimitType, formatCurrency } from '@/lib/mortgage-utils';
-import type { CaseIncomeField, CaseLiabilityField, CaseBankResult, Stage2BankDebugRow, QualSegment } from '@/lib/case';
+import type { CaseIncomeField, CaseLiabilityField, CaseBankResult, Stage2BankDebugRow, QualSegment, BankStructuredEvaluation } from '@/lib/case';
 
 interface QualProfile {
   segmentPath: string;
@@ -38,6 +38,7 @@ interface DebugPanelProps {
   segmentRoute?: string;
   qualProfile?: QualProfile;
   routeExclusions?: Record<string, string>;
+  structuredEvalByBank?: Record<string, BankStructuredEvaluation>;
 }
 
 export default function DebugPanel({
@@ -45,12 +46,14 @@ export default function DebugPanel({
   loanAmount, stressRate, tenorMonths, bankResults,
   employmentType, residencyStatus, nationality, emirate,
   stage2DebugRows, segment, segmentRoute, qualProfile, routeExclusions,
+  structuredEvalByBank,
 }: DebugPanelProps) {
   const [visible, setVisible] = useState(false);
   const [incomeOpen, setIncomeOpen] = useState(true);
   const [liabOpen, setLiabOpen] = useState(true);
   const [stage1Open, setStage1Open] = useState(true);
   const [stage2Open, setStage2Open] = useState(false);
+  const [structuredOpen, setStructuredOpen] = useState(false);
 
   // Ctrl+Shift+D toggle
   useEffect(() => {
@@ -64,7 +67,6 @@ export default function DebugPanel({
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Also log to console for quick access
   useEffect(() => {
     if (!visible) return;
     console.group('🔍 Maverick Debug — Qualification Data');
@@ -76,41 +78,25 @@ export default function DebugPanel({
       effectiveMonthly: normalizeToMonthly(f.amount * f.percentConsidered / 100, f.recurrence),
     })));
     console.log('Total Income:', totalIncome);
-    console.table(liabilityFields.map(f => ({
-      type: f.liabilityType,
-      rawAmount: f.amount,
-      creditCardLimit: f.creditCardLimit,
-      recurrence: f.recurrence,
-      closed: f.closedBeforeApplication,
-      effectiveMonthly: f.closedBeforeApplication ? 0 : isLimitType(f.liabilityType) ? f.creditCardLimit * 0.05 : normalizeToMonthly(f.amount, f.recurrence),
-    })));
     console.log('Total Liabilities:', totalLiabilities);
     console.log('Stage 1 inputs:', { totalIncome, totalLiabilities, loanAmount, stressRate, tenorMonths });
     console.log('Stage 2 inputs:', { employmentType, residencyStatus, nationality, emirate });
-    console.log('Bank results:', bankResults.map(r => ({
-      bank: r.bank.bankName, stressRate: r.stressRate, stressEMI: r.stressEMI,
-      dbr: r.dbr, dbrLimit: r.dbrLimit, eligible: r.eligible,
-    })));
-    console.table(stage2DebugRows.map(row => ({
-      bank: row.bankName,
-      stage1MinSalarySource: row.stage1MinSalarySource,
-      stage1MinSalaryValue: row.stage1MinSalaryValue,
-      stage2MinSalarySource: row.stage2MinSalarySource,
-      stage2MinSalaryRawValue: row.stage2MinSalaryRawValue,
-      stage2MinSalaryParsedValue: row.stage2MinSalaryParsedValue,
-      dbrLimitSource: row.dbrLimitSource,
-      dbrLimitValue: row.dbrLimitValue,
-      minLoanSource: row.minLoanSource,
-      minLoanValue: row.minLoanValue,
-      maxLoanSource: row.maxLoanSource,
-      maxLoanValue: row.maxLoanValue,
-      stage1Outcome: row.stage1Outcome,
-      stage2Outcome: row.stage2Outcome,
-      productEligibilityIncluded: row.productEligibilityIncluded,
-      productEligibilityReason: row.productEligibilityReason,
-    })));
+    if (structuredEvalByBank && Object.keys(structuredEvalByBank).length > 0) {
+      console.group('📋 Structured Rules');
+      for (const [bankId, eval_] of Object.entries(structuredEvalByBank)) {
+        console.groupCollapsed(`Bank ${bankId.slice(0, 8)}…`);
+        console.table(eval_.ruleResults.map(r => ({
+          rule: r.ruleType, status: r.status, summary: r.summary,
+          operator: r.source.operator, value: r.source.valueNumeric ?? r.source.valueText,
+        })));
+        console.log('Income policies:', eval_.incomePolicies.length);
+        console.log('Automatable:', eval_.isAutomatable);
+        console.groupEnd();
+      }
+      console.groupEnd();
+    }
     console.groupEnd();
-  }, [visible, incomeFields, liabilityFields, totalIncome, totalLiabilities, loanAmount, stressRate, tenorMonths, bankResults, employmentType, residencyStatus, nationality, emirate, stage2DebugRows]);
+  }, [visible, incomeFields, liabilityFields, totalIncome, totalLiabilities, loanAmount, stressRate, tenorMonths, bankResults, employmentType, residencyStatus, nationality, emirate, stage2DebugRows, structuredEvalByBank]);
 
   if (!visible) {
     return (
@@ -126,8 +112,10 @@ export default function DebugPanel({
     );
   }
 
+  const structuredEntries = structuredEvalByBank ? Object.entries(structuredEvalByBank) : [];
+
   return (
-    <div className="fixed bottom-0 right-0 z-50 w-[480px] max-h-[70vh] overflow-y-auto shadow-2xl border-l border-t border-border bg-background rounded-tl-lg">
+    <div className="fixed bottom-0 right-0 z-50 w-[520px] max-h-[70vh] overflow-y-auto shadow-2xl border-l border-t border-border bg-background rounded-tl-lg">
       <div className="flex items-center justify-between px-3 py-2 bg-muted border-b">
         <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
           <Bug className="h-3.5 w-3.5" /> Debug Panel
@@ -217,7 +205,7 @@ export default function DebugPanel({
           </CollapsibleContent>
         </Collapsible>
 
-        {/* STAGE 1 INPUTS/OUTPUTS */}
+        {/* STAGE 1 */}
         <Collapsible open={stage1Open} onOpenChange={setStage1Open}>
           <CollapsibleTrigger className="flex items-center gap-1 font-bold text-foreground">
             {stage1Open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
@@ -267,7 +255,7 @@ export default function DebugPanel({
           </CollapsibleContent>
         </Collapsible>
 
-        {/* STAGE 2 INPUTS */}
+        {/* STAGE 2 LEGACY */}
         <Collapsible open={stage2Open} onOpenChange={setStage2Open}>
           <CollapsibleTrigger className="flex items-center gap-1 font-bold text-foreground">
             {stage2Open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
@@ -295,18 +283,10 @@ export default function DebugPanel({
               <span className="text-right font-semibold">{employmentType || '(not set)'}</span>
               <span className="text-muted-foreground">Residency Status:</span>
               <span className="text-right font-semibold">{residencyStatus || '(not set)'}</span>
-              <span className="text-muted-foreground">Policy Segment:</span>
-              <span className="text-right font-semibold">{residencyStatus === 'non_resident' ? 'Non-Resident' : 'Resident'}</span>
-              <span className="text-muted-foreground">Policy Employment:</span>
-              <span className="text-right font-semibold">{employmentType === 'self_employed' ? 'Self Employed' : residencyStatus === 'non_resident' ? 'Mixed' : 'Salaried'}</span>
               <span className="text-muted-foreground">Nationality:</span>
               <span className="text-right font-semibold">{nationality || '(not set)'}</span>
               <span className="text-muted-foreground">Emirate:</span>
               <span className="text-right font-semibold">{emirate || '(not set)'}</span>
-              <span className="text-muted-foreground">Loan Amount:</span>
-              <span className="text-right font-semibold">AED {formatCurrency(loanAmount)}</span>
-              <span className="text-muted-foreground">Total Income (for min salary):</span>
-              <span className="text-right font-semibold">AED {formatCurrency(Math.round(totalIncome))}</span>
             </div>
 
             {routeExclusions && Object.keys(routeExclusions).length > 0 && (
@@ -335,7 +315,6 @@ export default function DebugPanel({
                       <td className="py-1 pr-2">
                         <div>Stage 1: {row.stage1MinSalarySource} = {row.stage1MinSalaryValue != null ? `AED ${formatCurrency(row.stage1MinSalaryValue)}` : 'n/a'}</div>
                         <div>Stage 2 src: {row.stage2MinSalarySource ?? 'n/a'}</div>
-                        <div>Raw: {row.stage2MinSalaryRawValue ?? 'n/a'}</div>
                         <div>Parsed: {row.stage2MinSalaryParsedValue != null ? `AED ${formatCurrency(row.stage2MinSalaryParsedValue)}` : 'n/a'}</div>
                       </td>
                       <td className="py-1 pr-2">
@@ -352,6 +331,72 @@ export default function DebugPanel({
                   ))}
                 </tbody>
               </table>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* STRUCTURED RULES */}
+        <Collapsible open={structuredOpen} onOpenChange={setStructuredOpen}>
+          <CollapsibleTrigger className="flex items-center gap-1 font-bold text-foreground">
+            {structuredOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            Structured Rules ({structuredEntries.length} banks)
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            {structuredEntries.length === 0 ? (
+              <p className="text-[10px] text-muted-foreground mt-1">No structured rules loaded from bank_eligibility_rules.</p>
+            ) : (
+              <div className="space-y-3 mt-1">
+                {structuredEntries.map(([bankId, eval_]) => (
+                  <div key={bankId} className="border border-border/50 rounded p-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold text-[10px]">{bankId.slice(0, 8)}…</span>
+                      <Badge className={`text-[8px] px-1 py-0 ${
+                        eval_.hasCriticalFail ? 'bg-red-600 text-white' :
+                        eval_.hasManualReview ? 'bg-amber-500 text-white' :
+                        eval_.allCriticalPass ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {eval_.hasCriticalFail ? 'FAIL' : eval_.hasManualReview ? 'REVIEW' : eval_.allCriticalPass ? 'PASS' : 'PARTIAL'}
+                      </Badge>
+                      {!eval_.isAutomatable && (
+                        <Badge className="bg-amber-600 text-white text-[8px] px-1 py-0">MANUAL</Badge>
+                      )}
+                      <span className="text-[9px] text-muted-foreground ml-auto">
+                        {eval_.ruleResults.length} rules, {eval_.incomePolicies.length} income policies
+                      </span>
+                    </div>
+                    {eval_.ruleResults.length > 0 && (
+                      <table className="w-full text-[9px]">
+                        <tbody>
+                          {eval_.ruleResults.map((r, i) => (
+                            <tr key={i} className="border-t border-border/20">
+                              <td className="py-0.5 pr-1">
+                                <Badge className={`text-[7px] px-1 py-0 ${
+                                  r.status === 'pass' ? 'bg-green-600 text-white' :
+                                  r.status === 'fail' ? 'bg-red-600 text-white' :
+                                  r.status === 'manual_review' ? 'bg-amber-500 text-white' :
+                                  'bg-muted text-muted-foreground'
+                                }`}>{r.status}</Badge>
+                              </td>
+                              <td className="py-0.5 pr-1 font-semibold">{r.ruleType}</td>
+                              <td className="py-0.5 text-muted-foreground">{r.summary}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                    {eval_.incomePolicies.length > 0 && (
+                      <div className="mt-1 text-[9px]">
+                        <span className="font-semibold">Income Policies:</span>
+                        {eval_.incomePolicies.map((p, i) => (
+                          <span key={i} className="ml-1 text-muted-foreground">
+                            {p.income_type}@{p.consideration_pct}%{i < eval_.incomePolicies.length - 1 ? ',' : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </CollapsibleContent>
         </Collapsible>
