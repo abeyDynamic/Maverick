@@ -336,6 +336,8 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     loadPolicyTerms();
   }, [bankNames, bankNamesKey, policyEmployment, policySegment]);
 
+  const resolvedSegment: QualSegment = segment || deriveSegment(residency, empType);
+
   const stage2ByBank = useMemo(
     () => evaluateStage2ForBanks(bankResults, policyTerms, {
       totalIncome,
@@ -343,8 +345,9 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
       nationality,
       emirate,
       employmentType: empType,
+      segment: resolvedSegment,
     }),
-    [bankResults, policyTerms, totalIncome, loanAmount, nationality, emirate, empType]
+    [bankResults, policyTerms, totalIncome, loanAmount, nationality, emirate, empType, resolvedSegment]
   );
 
   const finalEligibleBankIds = useMemo(

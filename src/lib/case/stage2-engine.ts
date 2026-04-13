@@ -28,6 +28,7 @@ export interface Stage2EvaluationContext {
   nationality: string;
   emirate: string;
   employmentType: string;
+  segment?: import('./types').QualSegment;
 }
 
 export interface Stage2BankDebugRow {
