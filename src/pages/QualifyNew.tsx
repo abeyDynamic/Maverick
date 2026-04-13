@@ -44,6 +44,9 @@ import {
   type QualSegment,
   type SelfEmployedInfo,
   type NonResidentInfo,
+  type EligibilityRule,
+  type IncomePolicy,
+  type BankStructuredEvaluation,
   EMPTY_SE_INFO,
   EMPTY_NR_INFO,
   deriveSegment,
@@ -64,6 +67,7 @@ import {
   evaluateStage2ForBanks,
   getStage2PolicyFilters,
   saveQualificationSnapshot,
+  evaluateStructuredRulesForBank,
 } from '@/lib/case';
 
 // ── Adapters: convert UI entries to Case engine fields ──
@@ -118,14 +122,18 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   const [policyTerms, setPolicyTerms] = useState<PolicyTerm[]>([]);
   const [routeSupport, setRouteSupport] = useState<{ bank_id: string; segment_path: string; route_type: string; supported: boolean }[]>([]);
   const [routeExclusions, setRouteExclusions] = useState<Record<string, string>>({});
+  const [eligibilityRules, setEligibilityRules] = useState<EligibilityRule[]>([]);
+  const [incomePolicies, setIncomePolicies] = useState<IncomePolicy[]>([]);
 
   useEffect(() => {
     async function loadReferenceData() {
-      const [bankRes, notesRes, productRes, routeRes] = await Promise.all([
+      const [bankRes, notesRes, productRes, routeRes, rulesRes, policiesRes] = await Promise.all([
         supabase.from('banks').select('*').eq('active', true),
         supabase.from('qualification_notes').select('*').eq('active', true),
         supabase.from('products').select('*') as any,
         supabase.from('bank_route_support').select('bank_id, segment_path, route_type, supported') as any,
+        supabase.from('bank_eligibility_rules').select('*').eq('active', true) as any,
+        supabase.from('bank_income_policies').select('*').eq('active', true) as any,
       ]);
       const allBankData = (bankRes.data ?? []).map(toBankFromRow);
       setAllBanks(allBankData);
@@ -133,6 +141,8 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
       setQualNotes((notesRes.data ?? []) as any);
       setProductRows(filterActiveProducts((productRes.data ?? []) as ProductRow[]));
       setRouteSupport((routeRes.data ?? []) as any);
+      setEligibilityRules((rulesRes.data ?? []) as EligibilityRule[]);
+      setIncomePolicies((policiesRes.data ?? []) as IncomePolicy[]);
     }
     loadReferenceData();
   }, []);
