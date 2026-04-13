@@ -24,6 +24,9 @@ import BankEligibilityTable from '@/components/results/BankEligibilityTable';
 import WhatIfChat from '@/components/results/WhatIfChat';
 import CostBreakdownSection, { type ProductData } from '@/components/results/CostBreakdownSection';
 import DebugPanel from '@/components/qualify/DebugPanel';
+import SegmentSelector from '@/components/qualify/SegmentSelector';
+import SelfEmployedSection from '@/components/qualify/SelfEmployedSection';
+import NonResidentSection from '@/components/qualify/NonResidentSection';
 import {
   COUNTRIES, INCOME_TYPES, LIABILITY_TYPES, TRANSACTION_TYPES, PROPERTY_TYPES,
   PURPOSES, LOAN_TYPE_PREFERENCES, EMIRATES,
@@ -38,6 +41,12 @@ import {
   type CaseCoBorrower,
   type ProductRow,
   type PolicyTerm,
+  type QualSegment,
+  type SelfEmployedInfo,
+  type NonResidentInfo,
+  EMPTY_SE_INFO,
+  EMPTY_NR_INFO,
+  deriveSegment,
   toBankFromRow,
   calcTotalIncome,
   calcTotalLiabilities,
@@ -120,6 +129,11 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     }
     loadReferenceData();
   }, []);
+
+  // Segment
+  const [segment, setSegment] = useState<QualSegment | ''>('');
+  const [seInfo, setSeInfo] = useState<SelfEmployedInfo>({ ...EMPTY_SE_INFO });
+  const [nrInfo, setNrInfo] = useState<NonResidentInfo>({ ...EMPTY_NR_INFO });
 
   // Client name
   const [clientName, setClientName] = useState('');
@@ -322,6 +336,8 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     loadPolicyTerms();
   }, [bankNames, bankNamesKey, policyEmployment, policySegment]);
 
+  const resolvedSegment: QualSegment = segment || deriveSegment(residency, empType);
+
   const stage2ByBank = useMemo(
     () => evaluateStage2ForBanks(bankResults, policyTerms, {
       totalIncome,
@@ -329,8 +345,9 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
       nationality,
       emirate,
       employmentType: empType,
+      segment: resolvedSegment,
     }),
-    [bankResults, policyTerms, totalIncome, loanAmount, nationality, emirate, empType]
+    [bankResults, policyTerms, totalIncome, loanAmount, nationality, emirate, empType, resolvedSegment]
   );
 
   const finalEligibleBankIds = useMemo(
@@ -423,6 +440,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
     setSaving(true);
     try {
+      const resolvedSegment = segment || deriveSegment(residency, empType);
       const appId = await saveQualificationSnapshot({
         userId: user.id,
         editApplicantId,
@@ -432,6 +450,9 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
           nationality,
           dateOfBirth: dob,
           employmentType: empType,
+          segment: resolvedSegment,
+          selfEmployedInfo: resolvedSegment === 'self_employed' ? seInfo : undefined,
+          nonResidentInfo: resolvedSegment === 'non_resident' ? nrInfo : undefined,
         },
         property: {
           propertyValue, loanAmount, ltv, emirate, isDIFC, isAlAin,
@@ -488,63 +509,102 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
               />
             </div>
 
-            {/* SECTION 1 — Personal */}
-            <Card>
-              <CardHeader className="py-3 px-4"><CardTitle className="text-sm font-semibold text-primary">1. Personal Information</CardTitle></CardHeader>
-              <CardContent className="px-4 pb-4 space-y-3">
-                <div className="grid gap-3 grid-cols-2">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Residency Status <span className="text-destructive">*</span></Label>
-                    <Select value={residency} onValueChange={setResidency}>
-                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="uae_national">UAE National</SelectItem>
-                        <SelectItem value="resident_expat">Resident Expat</SelectItem>
-                        <SelectItem value="non_resident">Non-Resident</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Nationality <span className="text-destructive">*</span></Label>
-                    <Select value={nationality} onValueChange={setNationality}>
-                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
-                      <SelectContent className="max-h-60">
-                        {COUNTRIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Date of Birth <span className="text-destructive">*</span></Label>
-                    <Input
-                      type="date"
-                      className="mt-1 h-8 text-xs"
-                      max={format(new Date(), 'yyyy-MM-dd')}
-                      min="1940-01-01"
-                      value={dob ? format(dob, 'yyyy-MM-dd') : ''}
-                      onChange={e => {
-                        const v = e.target.value;
-                        setDob(v ? new Date(v + 'T00:00:00') : null);
-                      }}
-                    />
-                    {mainAge !== null && mainTenorElig && (
-                      <p className="mt-1 text-[10px] text-muted-foreground">
-                        Age: <strong className="text-primary">{mainAge.years}y</strong> | Max tenor: <strong className="text-primary">{mainTenorElig.salaried}m</strong> (sal) / <strong className="text-primary">{mainTenorElig.selfEmployed}m</strong> (SE)
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Employment Type</Label>
-                    <Select value={empType} onValueChange={setEmpType}>
-                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="salaried">Salaried</SelectItem>
-                        <SelectItem value="self_employed">Self-Employed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* SEGMENT SELECTOR */}
+            <SegmentSelector
+              value={segment}
+              onChange={(seg) => {
+                setSegment(seg);
+                // Auto-set residency & employment based on segment
+                if (seg === 'resident_salaried') {
+                  if (!residency || residency === 'non_resident') setResidency('resident_expat');
+                  setEmpType('salaried');
+                } else if (seg === 'self_employed') {
+                  if (!residency || residency === 'non_resident') setResidency('resident_expat');
+                  setEmpType('self_employed');
+                } else if (seg === 'non_resident') {
+                  setResidency('non_resident');
+                  // NR employment type is set in the NR section
+                  setEmpType(nrInfo.employmentTypeNR || 'salaried');
+                }
+              }}
+            />
+
+            {/* Only show form after segment is selected */}
+            {segment && (
+              <>
+                {/* SECTION 1 — Personal */}
+                <Card>
+                  <CardHeader className="py-3 px-4"><CardTitle className="text-sm font-semibold text-primary">1. Personal Information</CardTitle></CardHeader>
+                  <CardContent className="px-4 pb-4 space-y-3">
+                    <div className="grid gap-3 grid-cols-2">
+                      {segment !== 'non_resident' && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Residency Status <span className="text-destructive">*</span></Label>
+                          <Select value={residency} onValueChange={setResidency}>
+                            <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="uae_national">UAE National</SelectItem>
+                              <SelectItem value="resident_expat">Resident Expat</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Nationality <span className="text-destructive">*</span></Label>
+                        <Select value={nationality} onValueChange={setNationality}>
+                          <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                          <SelectContent className="max-h-60">
+                            {COUNTRIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Date of Birth <span className="text-destructive">*</span></Label>
+                        <Input
+                          type="date"
+                          className="mt-1 h-8 text-xs"
+                          max={format(new Date(), 'yyyy-MM-dd')}
+                          min="1940-01-01"
+                          value={dob ? format(dob, 'yyyy-MM-dd') : ''}
+                          onChange={e => {
+                            const v = e.target.value;
+                            setDob(v ? new Date(v + 'T00:00:00') : null);
+                          }}
+                        />
+                        {mainAge !== null && mainTenorElig && (
+                          <p className="mt-1 text-[10px] text-muted-foreground">
+                            Age: <strong className="text-primary">{mainAge.years}y</strong> | Max tenor: <strong className="text-primary">{mainTenorElig.salaried}m</strong> (sal) / <strong className="text-primary">{mainTenorElig.selfEmployed}m</strong> (SE)
+                          </p>
+                        )}
+                      </div>
+                      {segment === 'resident_salaried' && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Employment Type</Label>
+                          <Select value={empType} onValueChange={setEmpType}>
+                            <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="salaried">Salaried</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* SEGMENT-SPECIFIC SECTIONS */}
+                {segment === 'self_employed' && (
+                  <SelfEmployedSection info={seInfo} onChange={setSeInfo} />
+                )}
+                {segment === 'non_resident' && (
+                  <NonResidentSection
+                    info={nrInfo}
+                    onChange={(info) => {
+                      setNrInfo(info);
+                      setEmpType(info.employmentTypeNR || 'salaried');
+                    }}
+                  />
+                )}
 
             {/* SECTION 2 — Property */}
             <Card>
@@ -718,8 +778,11 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
               </CardContent>
             </Card>
 
+              </>
+            )}
+
             {/* Save */}
-            <Button onClick={handleSave} disabled={saving} className="w-full bg-accent text-accent-foreground hover:bg-accent/90" size="lg">
+            <Button onClick={handleSave} disabled={saving || !segment} className="w-full bg-accent text-accent-foreground hover:bg-accent/90" size="lg">
               <Save className="mr-2 h-4 w-4" />
               {saving ? 'Saving…' : editApplicantId ? 'Save & Update' : 'Save Qualification'}
             </Button>
@@ -798,6 +861,8 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         nationality={nationality}
         emirate={emirate}
         stage2DebugRows={stage2DebugRows}
+        segment={resolvedSegment}
+        segmentRoute={segment === 'self_employed' ? `SE/${seInfo.docType || 'unset'}` : segment === 'non_resident' ? `NR/${nrInfo.dabRequired ? 'DAB' : 'standard'}` : 'resident_salaried'}
       />
     </div>
   );

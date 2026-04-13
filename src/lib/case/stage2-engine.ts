@@ -28,11 +28,13 @@ export interface Stage2EvaluationContext {
   nationality: string;
   emirate: string;
   employmentType: string;
+  segment?: import('./types').QualSegment;
 }
 
 export interface Stage2BankDebugRow {
   bankId: string;
   bankName: string;
+  segment: string;
   stage1MinSalarySource: string;
   stage1MinSalaryValue: number | null;
   stage2MinSalarySource: string | null;
@@ -92,12 +94,14 @@ function buildDebugRow(
   summary: Stage2Summary,
   productEligible: boolean,
   productEligibilityReason: string,
+  segment: string,
 ): Stage2BankDebugRow {
   const minSalaryCheck = checks.find(check => check.name === 'Min Salary');
 
   return {
     bankId: bankResult.bank.id,
     bankName: bankResult.bank.bankName,
+    segment,
     stage1MinSalarySource: 'banks.min_salary',
     stage1MinSalaryValue: bankResult.bank.minSalary ?? null,
     stage2MinSalarySource: minSalaryCheck?.debug?.attribute ?? null,
@@ -156,7 +160,7 @@ export function evaluateStage2ForBanks(
       finalEligible,
       productEligible: finalEligible,
       productEligibilityReason,
-      debug: buildDebugRow(bankResult, checks, summary, finalEligible, productEligibilityReason),
+      debug: buildDebugRow(bankResult, checks, summary, finalEligible, productEligibilityReason, context.segment ?? 'resident_salaried'),
     };
 
     return acc;

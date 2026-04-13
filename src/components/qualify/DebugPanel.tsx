@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Bug, ChevronDown, ChevronRight } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { normalizeToMonthly, isLimitType, formatCurrency } from '@/lib/mortgage-utils';
-import type { CaseIncomeField, CaseLiabilityField, CaseBankResult, Stage2BankDebugRow } from '@/lib/case';
+import type { CaseIncomeField, CaseLiabilityField, CaseBankResult, Stage2BankDebugRow, QualSegment } from '@/lib/case';
 
 interface DebugPanelProps {
   incomeFields: CaseIncomeField[];
@@ -27,13 +27,15 @@ interface DebugPanelProps {
   nationality: string;
   emirate: string;
   stage2DebugRows: Stage2BankDebugRow[];
+  segment?: QualSegment | '';
+  segmentRoute?: string;
 }
 
 export default function DebugPanel({
   incomeFields, liabilityFields, totalIncome, totalLiabilities,
   loanAmount, stressRate, tenorMonths, bankResults,
   employmentType, residencyStatus, nationality, emirate,
-  stage2DebugRows,
+  stage2DebugRows, segment, segmentRoute,
 }: DebugPanelProps) {
   const [visible, setVisible] = useState(false);
   const [incomeOpen, setIncomeOpen] = useState(true);
@@ -264,6 +266,10 @@ export default function DebugPanel({
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1 text-[10px]">
+              <span className="text-muted-foreground font-bold">Segment:</span>
+              <span className="text-right font-bold">{segment || '(not set)'}</span>
+              <span className="text-muted-foreground">Segment Route:</span>
+              <span className="text-right font-semibold">{segmentRoute || '(auto)'}</span>
               <span className="text-muted-foreground">Employment Type:</span>
               <span className="text-right font-semibold">{employmentType || '(not set)'}</span>
               <span className="text-muted-foreground">Residency Status:</span>
