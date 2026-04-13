@@ -9,19 +9,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { Plus, Save, Edit2 } from 'lucide-react';
+import { Plus, Save, Edit2, AlertTriangle } from 'lucide-react';
 
 const SEGMENTS = ['resident', 'non_resident'];
 const EMPLOYMENT_SUBTYPES = ['salaried', 'self_employed'];
 const DOC_PATHS = ['standard', 'full_doc', 'low_doc', 'na'];
 const ROUTE_TYPES = ['dbr', 'dab', 'both', 'manual'];
 const INCOME_TYPES = [
-  'basic_salary', 'housing_allowance', 'transport_allowance', 'other_allowance',
-  'bonus_fixed', 'bonus_variable', 'commission_variable',
-  'rental_income_1', 'rental_income_2', 'other_income',
-  'business_income', 'freelance_income', 'pension',
+  'Basic Salary', 'Housing Allowance', 'Transport Allowance',
+  'Bonus Fixed', 'Bonus Variable', 'Commission Variable',
+  'Rental Income 1', 'Rental Income 2', 'Other Income',
+  'Business Income', 'Declared Monthly Income',
 ];
-const AVERAGING_METHODS = ['', 'simple_average', 'weighted_average', 'lowest_of_period'];
+const AVERAGING_METHODS = ['simple_average', 'weighted_average', 'lowest_of_period'];
 
 interface IncomePolicy {
   id: string;
@@ -44,7 +44,7 @@ interface IncomePolicy {
 
 const EMPTY_POLICY: Omit<IncomePolicy, 'id' | 'bank_name'> = {
   bank_id: '', segment: 'resident', employment_subtype: null, doc_path: null,
-  route_type: null, income_type: 'basic_salary', consideration_pct: 100,
+  route_type: null, income_type: 'Basic Salary', consideration_pct: 100,
   income_basis: null, averaging_method: null, averaging_months: null,
   requires_documents: false, conditions: null, notes: null, active: true,
 };
@@ -53,6 +53,7 @@ export default function IncomePoliciesManagement() {
   const [policies, setPolicies] = useState<IncomePolicy[]>([]);
   const [banks, setBanks] = useState<{ id: string; bank_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [filterBank, setFilterBank] = useState('all');
   const [filterSegment, setFilterSegment] = useState('all');
   const [filterIncomeType, setFilterIncomeType] = useState('all');
@@ -63,12 +64,33 @@ export default function IncomePoliciesManagement() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
+
     const [polRes, banksRes] = await Promise.all([
-      supabase.from('bank_income_policies').select('*, banks!inner(bank_name)').order('bank_id').order('segment').order('income_type') as any,
+      supabase.from('bank_income_policies').select('*, banks(bank_name)').order('bank_id').order('segment').order('income_type') as any,
       supabase.from('banks').select('id, bank_name').order('bank_name'),
     ]);
-    if (polRes.data) setPolicies(polRes.data.map((r: any) => ({ ...r, bank_name: r.banks?.bank_name ?? 'Unknown' })));
-    if (banksRes.data) setBanks(banksRes.data as any);
+
+    if (polRes.error) {
+      const msg = `Income policies query failed: ${polRes.error.message}`;
+      console.error('bank_income_policies fetch error:', polRes.error);
+      setFetchError(msg);
+      toast.error(msg);
+      setLoading(false);
+      return;
+    }
+    if (banksRes.error) {
+      const msg = `Banks query failed: ${banksRes.error.message}`;
+      console.error('banks fetch error:', banksRes.error);
+      setFetchError(msg);
+      toast.error(msg);
+      setLoading(false);
+      return;
+    }
+
+    console.log(`[IncomePolicies] Fetched ${polRes.data?.length ?? 0} policies, ${banksRes.data?.length ?? 0} banks`);
+    setPolicies((polRes.data ?? []).map((r: any) => ({ ...r, bank_name: r.banks?.bank_name ?? 'Unknown' })));
+    setBanks((banksRes.data ?? []) as any);
     setLoading(false);
   }, []);
 
@@ -104,11 +126,11 @@ export default function IncomePoliciesManagement() {
 
     if (editingPolicy) {
       const { error } = await supabase.from('bank_income_policies').update(payload).eq('id', editingPolicy.id);
-      if (error) { toast.error('Failed to update'); setSaving(false); return; }
+      if (error) { toast.error(`Failed to update: ${error.message}`); setSaving(false); return; }
       recordId = editingPolicy.id;
     } else {
       const { data, error } = await supabase.from('bank_income_policies').insert(payload).select('id').single();
-      if (error || !data) { toast.error('Failed to create'); setSaving(false); return; }
+      if (error || !data) { toast.error(`Failed to create: ${error?.message}`); setSaving(false); return; }
       recordId = data.id;
     }
 
@@ -130,6 +152,17 @@ export default function IncomePoliciesManagement() {
 
   return (
     <div className="space-y-4">
+      {/* Debug bar */}
+      <div className="flex items-center gap-4 px-3 py-2 rounded-md bg-muted/40 text-xs text-muted-foreground border border-border">
+        <span>Rows fetched: <strong className="text-foreground">{policies.length}</strong></span>
+        <span>Filtered: <strong className="text-foreground">{filtered.length}</strong></span>
+        {fetchError && (
+          <span className="flex items-center gap-1 text-destructive">
+            <AlertTriangle className="h-3.5 w-3.5" /> {fetchError}
+          </span>
+        )}
+      </div>
+
       <Card className="bg-background">
         <CardContent className="py-3 px-4">
           <div className="flex flex-wrap items-end gap-3">
@@ -147,15 +180,14 @@ export default function IncomePoliciesManagement() {
                 <SelectContent><SelectItem value="all">All</SelectItem>{SEGMENTS.map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="w-[160px]">
+            <div className="w-[180px]">
               <Label className="text-xs text-muted-foreground">Income Type</Label>
               <Select value={filterIncomeType} onValueChange={setFilterIncomeType}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="all">All</SelectItem>{INCOME_TYPES.map(t => <SelectItem key={t} value={t}>{t.replace(/_/g, ' ')}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value="all">All</SelectItem>{INCOME_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <Button size="sm" className="gap-1 ml-auto" onClick={openNew}><Plus className="h-4 w-4" /> Add Policy</Button>
-            <span className="text-xs text-muted-foreground">{filtered.length} policies</span>
           </div>
         </CardContent>
       </Card>
@@ -184,7 +216,7 @@ export default function IncomePoliciesManagement() {
                       <tr key={p.id} className={i % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
                         <td className="px-3 py-2 font-medium">{p.bank_name}</td>
                         <td className="px-3 py-2 text-xs">{p.segment.replace(/_/g, ' ')}</td>
-                        <td className="px-3 py-2 text-xs">{p.income_type.replace(/_/g, ' ')}</td>
+                        <td className="px-3 py-2 text-xs">{p.income_type}</td>
                         <td className="px-3 py-2 text-center font-mono">{p.consideration_pct}%</td>
                         <td className="px-3 py-2 text-xs">{p.income_basis || '—'}</td>
                         <td className="px-3 py-2 text-xs">{p.averaging_method?.replace(/_/g, ' ') || '—'}</td>
@@ -223,7 +255,7 @@ export default function IncomePoliciesManagement() {
               <Label className="text-xs">Income Type *</Label>
               <Select value={form.income_type} onValueChange={v => setForm(p => ({ ...p, income_type: v }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>{INCOME_TYPES.map(t => <SelectItem key={t} value={t}>{t.replace(/_/g, ' ')}</SelectItem>)}</SelectContent>
+                <SelectContent>{INCOME_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
@@ -238,7 +270,7 @@ export default function IncomePoliciesManagement() {
               <Label className="text-xs">Averaging Method</Label>
               <Select value={form.averaging_method ?? '__none__'} onValueChange={v => setForm(p => ({ ...p, averaging_method: v === '__none__' ? null : v }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="None" /></SelectTrigger>
-                <SelectContent><SelectItem value="__none__">None</SelectItem>{AVERAGING_METHODS.filter(Boolean).map(m => <SelectItem key={m} value={m}>{m.replace(/_/g, ' ')}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value="__none__">None</SelectItem>{AVERAGING_METHODS.map(m => <SelectItem key={m} value={m}>{m.replace(/_/g, ' ')}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
