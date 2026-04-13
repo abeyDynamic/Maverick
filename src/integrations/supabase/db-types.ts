@@ -117,6 +117,12 @@ export interface Database {
           status: string; validity_end: string | null;
           created_at: string; fixed_period: string | null;
           processing_fee: number | null;
+          employment_subtype: string | null;
+          doc_path: string | null;
+          route_type: string | null;
+          requires_stage1_pass: boolean;
+          requires_stage2_pass: boolean;
+          manual_only: boolean;
         };
         Insert: Partial<Database['public']['Tables']['products']['Row']> & { bank_id: string };
         Update: Partial<Database['public']['Tables']['products']['Row']>;
@@ -137,6 +143,64 @@ export interface Database {
         };
         Insert: Partial<Database['public']['Tables']['ticker_updates']['Row']> & { content: string };
         Update: Partial<Database['public']['Tables']['ticker_updates']['Row']>;
+      };
+      qualification_notes: {
+        Row: {
+          id: string; bank_name: string; note_text: string;
+          note_type: string | null; segment: string | null;
+          employment_subtype: string | null; doc_path: string | null;
+          route_type: string | null; critical: boolean;
+          active: boolean; created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['qualification_notes']['Row']> & { bank_name: string; note_text: string };
+        Update: Partial<Database['public']['Tables']['qualification_notes']['Row']>;
+      };
+      bank_eligibility_rules: {
+        Row: {
+          id: string; bank_id: string; segment: string;
+          employment_subtype: string | null; doc_path: string | null;
+          route_type: string | null; rule_type: string;
+          operator: string; value_numeric: number | null;
+          value_text: string | null; critical: boolean;
+          active: boolean; priority: number;
+          requires_manual_review: boolean; source_note: string | null;
+          created_at: string; updated_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['bank_eligibility_rules']['Row']> & { bank_id: string; rule_type: string };
+        Update: Partial<Database['public']['Tables']['bank_eligibility_rules']['Row']>;
+      };
+      bank_income_policies: {
+        Row: {
+          id: string; bank_id: string; segment: string;
+          employment_subtype: string | null; doc_path: string | null;
+          route_type: string | null; income_type: string;
+          consideration_pct: number; income_basis: string | null;
+          averaging_method: string | null; averaging_months: number | null;
+          requires_documents: boolean; conditions: string | null;
+          notes: string | null; active: boolean;
+          created_at: string; updated_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['bank_income_policies']['Row']> & { bank_id: string; income_type: string };
+        Update: Partial<Database['public']['Tables']['bank_income_policies']['Row']>;
+      };
+      bank_route_support: {
+        Row: {
+          id: string; bank_id: string; segment_path: string;
+          route_type: string; supported: boolean;
+          notes: string | null;
+          created_at: string; updated_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['bank_route_support']['Row']> & { bank_id: string; segment_path: string; route_type: string };
+        Update: Partial<Database['public']['Tables']['bank_route_support']['Row']>;
+      };
+      qualification_profiles: {
+        Row: {
+          id: string; applicant_id: string; segment_path: string;
+          employment_subtype: string | null; doc_path: string | null;
+          route_type: string; created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['qualification_profiles']['Row']> & { applicant_id: string; segment_path: string; route_type: string };
+        Update: Partial<Database['public']['Tables']['qualification_profiles']['Row']>;
       };
     };
   };

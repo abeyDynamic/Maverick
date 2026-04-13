@@ -13,6 +13,13 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { normalizeToMonthly, isLimitType, formatCurrency } from '@/lib/mortgage-utils';
 import type { CaseIncomeField, CaseLiabilityField, CaseBankResult, Stage2BankDebugRow, QualSegment } from '@/lib/case';
 
+interface QualProfile {
+  segmentPath: string;
+  employmentSubtype: string;
+  docPath: string | null;
+  routeType: string;
+}
+
 interface DebugPanelProps {
   incomeFields: CaseIncomeField[];
   liabilityFields: CaseLiabilityField[];
@@ -29,13 +36,15 @@ interface DebugPanelProps {
   stage2DebugRows: Stage2BankDebugRow[];
   segment?: QualSegment | '';
   segmentRoute?: string;
+  qualProfile?: QualProfile;
+  routeExclusions?: Record<string, string>;
 }
 
 export default function DebugPanel({
   incomeFields, liabilityFields, totalIncome, totalLiabilities,
   loanAmount, stressRate, tenorMonths, bankResults,
   employmentType, residencyStatus, nationality, emirate,
-  stage2DebugRows, segment, segmentRoute,
+  stage2DebugRows, segment, segmentRoute, qualProfile, routeExclusions,
 }: DebugPanelProps) {
   const [visible, setVisible] = useState(false);
   const [incomeOpen, setIncomeOpen] = useState(true);
@@ -270,6 +279,18 @@ export default function DebugPanel({
               <span className="text-right font-bold">{segment || '(not set)'}</span>
               <span className="text-muted-foreground">Segment Route:</span>
               <span className="text-right font-semibold">{segmentRoute || '(auto)'}</span>
+              {qualProfile && (
+                <>
+                  <span className="text-muted-foreground font-bold">Qual Profile — Path:</span>
+                  <span className="text-right font-bold">{qualProfile.segmentPath}</span>
+                  <span className="text-muted-foreground">Emp Subtype:</span>
+                  <span className="text-right font-semibold">{qualProfile.employmentSubtype}</span>
+                  <span className="text-muted-foreground">Doc Path:</span>
+                  <span className="text-right font-semibold">{qualProfile.docPath || '(n/a)'}</span>
+                  <span className="text-muted-foreground">Route Type:</span>
+                  <span className="text-right font-semibold">{qualProfile.routeType}</span>
+                </>
+              )}
               <span className="text-muted-foreground">Employment Type:</span>
               <span className="text-right font-semibold">{employmentType || '(not set)'}</span>
               <span className="text-muted-foreground">Residency Status:</span>
@@ -287,6 +308,15 @@ export default function DebugPanel({
               <span className="text-muted-foreground">Total Income (for min salary):</span>
               <span className="text-right font-semibold">AED {formatCurrency(Math.round(totalIncome))}</span>
             </div>
+
+            {routeExclusions && Object.keys(routeExclusions).length > 0 && (
+              <div className="mt-2 p-2 bg-destructive/10 rounded text-[10px]">
+                <span className="font-bold text-destructive">Route Exclusions:</span>
+                {Object.entries(routeExclusions).map(([bankId, reason]) => (
+                  <div key={bankId} className="ml-2">{bankId.slice(0, 8)}… — {reason}</div>
+                ))}
+              </div>
+            )}
 
             {stage2DebugRows.length > 0 && (
               <table className="w-full mt-2 text-[10px]">

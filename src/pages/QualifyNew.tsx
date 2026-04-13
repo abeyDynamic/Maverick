@@ -112,20 +112,27 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
   // Banks, notes & products from Supabase
   const [banks, setBanks] = useState<CaseBank[]>([]);
+  const [allBanks, setAllBanks] = useState<CaseBank[]>([]);
   const [qualNotes, setQualNotes] = useState<QualNote[]>([]);
   const [productRows, setProductRows] = useState<ProductRow[]>([]);
   const [policyTerms, setPolicyTerms] = useState<PolicyTerm[]>([]);
+  const [routeSupport, setRouteSupport] = useState<{ bank_id: string; segment_path: string; route_type: string; supported: boolean }[]>([]);
+  const [routeExclusions, setRouteExclusions] = useState<Record<string, string>>({});
 
   useEffect(() => {
     async function loadReferenceData() {
-      const [bankRes, notesRes, productRes] = await Promise.all([
+      const [bankRes, notesRes, productRes, routeRes] = await Promise.all([
         supabase.from('banks').select('*').eq('active', true),
         supabase.from('qualification_notes').select('*').eq('active', true),
         supabase.from('products').select('*') as any,
+        supabase.from('bank_route_support').select('bank_id, segment_path, route_type, supported') as any,
       ]);
-      setBanks((bankRes.data ?? []).map(toBankFromRow));
+      const allBankData = (bankRes.data ?? []).map(toBankFromRow);
+      setAllBanks(allBankData);
+      setBanks(allBankData);
       setQualNotes((notesRes.data ?? []) as any);
       setProductRows(filterActiveProducts((productRes.data ?? []) as ProductRow[]));
+      setRouteSupport((routeRes.data ?? []) as any);
     }
     loadReferenceData();
   }, []);
@@ -337,6 +344,38 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   }, [bankNames, bankNamesKey, policyEmployment, policySegment]);
 
   const resolvedSegment: QualSegment = segment || deriveSegment(residency, empType);
+
+  // Derive qualification profile fields
+  const qualProfile = useMemo(() => {
+    const segmentPath = resolvedSegment;
+    const employmentSubtype = empType || 'salaried';
+    const docPath = resolvedSegment === 'self_employed' ? (seInfo.docType || 'full_doc') : null;
+    const routeType = resolvedSegment === 'non_resident' && nrInfo.dabRequired ? 'dab'
+      : salaryTransfer ? 'salary_transfer' : 'non_salary_transfer';
+    return { segmentPath, employmentSubtype, docPath, routeType };
+  }, [resolvedSegment, empType, seInfo.docType, nrInfo.dabRequired, salaryTransfer]);
+
+  // Route support filtering — exclude banks that don't support this route
+  useEffect(() => {
+    if (routeSupport.length === 0) {
+      setBanks(allBanks);
+      setRouteExclusions({});
+      return;
+    }
+    const exclusions: Record<string, string> = {};
+    const filtered = allBanks.filter(bank => {
+      const bankRoutes = routeSupport.filter(r => r.bank_id === bank.id && r.segment_path === qualProfile.segmentPath);
+      if (bankRoutes.length === 0) return true; // no route data = allow
+      const matchingRoute = bankRoutes.find(r => r.route_type === qualProfile.routeType);
+      if (matchingRoute && !matchingRoute.supported) {
+        exclusions[bank.id] = `Route not supported: ${qualProfile.segmentPath}/${qualProfile.routeType}`;
+        return false;
+      }
+      return true;
+    });
+    setBanks(filtered);
+    setRouteExclusions(exclusions);
+  }, [allBanks, routeSupport, qualProfile.segmentPath, qualProfile.routeType]);
 
   const stage2ByBank = useMemo(
     () => evaluateStage2ForBanks(bankResults, policyTerms, {
@@ -863,6 +902,8 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         stage2DebugRows={stage2DebugRows}
         segment={resolvedSegment}
         segmentRoute={segment === 'self_employed' ? `SE/${seInfo.docType || 'unset'}` : segment === 'non_resident' ? `NR/${nrInfo.dabRequired ? 'DAB' : 'standard'}` : 'resident_salaried'}
+        qualProfile={qualProfile}
+        routeExclusions={routeExclusions}
       />
     </div>
   );

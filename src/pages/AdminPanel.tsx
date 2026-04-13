@@ -7,6 +7,9 @@ import EiborManagement from '@/components/admin/EiborManagement';
 import TickerManagement from '@/components/admin/TickerManagement';
 import BankManagement from '@/components/admin/BankManagement';
 import ProductManagement from '@/components/admin/ProductManagement';
+import EligibilityRulesManagement from '@/components/admin/EligibilityRulesManagement';
+import IncomePoliciesManagement from '@/components/admin/IncomePoliciesManagement';
+import RouteSupportManagement from '@/components/admin/RouteSupportManagement';
 import GlobalTickerBar from '@/components/GlobalTickerBar';
 
 export default function AdminPanel() {
@@ -25,26 +28,24 @@ export default function AdminPanel() {
       <GlobalTickerBar />
       <main className="container mx-auto px-6 py-8">
         <Tabs defaultValue="eibor">
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 flex-wrap h-auto gap-1">
             <TabsTrigger value="banks">Banks</TabsTrigger>
             <TabsTrigger value="products">Products</TabsTrigger>
+            <TabsTrigger value="eligibility">Eligibility Rules</TabsTrigger>
+            <TabsTrigger value="income_policies">Income Policies</TabsTrigger>
+            <TabsTrigger value="route_support">Route Support</TabsTrigger>
             <TabsTrigger value="eibor">EIBOR Rates</TabsTrigger>
             <TabsTrigger value="ticker">Ticker</TabsTrigger>
             <TabsTrigger value="notes">Qualification Notes</TabsTrigger>
             <TabsTrigger value="version">Version Log</TabsTrigger>
           </TabsList>
-          <TabsContent value="banks">
-            <BankManagement />
-          </TabsContent>
-          <TabsContent value="products">
-            <ProductManagement />
-          </TabsContent>
-          <TabsContent value="eibor">
-            <EiborManagement />
-          </TabsContent>
-          <TabsContent value="ticker">
-            <TickerManagement />
-          </TabsContent>
+          <TabsContent value="banks"><BankManagement /></TabsContent>
+          <TabsContent value="products"><ProductManagement /></TabsContent>
+          <TabsContent value="eligibility"><EligibilityRulesManagement /></TabsContent>
+          <TabsContent value="income_policies"><IncomePoliciesManagement /></TabsContent>
+          <TabsContent value="route_support"><RouteSupportManagement /></TabsContent>
+          <TabsContent value="eibor"><EiborManagement /></TabsContent>
+          <TabsContent value="ticker"><TickerManagement /></TabsContent>
           <TabsContent value="notes">
             <Card className="bg-background"><CardHeader><CardTitle>Qualification Notes</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Qualification notes management coming soon.</p></CardContent></Card>
           </TabsContent>
