@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Bug, ChevronDown, ChevronRight } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { normalizeToMonthly, isLimitType, formatCurrency } from '@/lib/mortgage-utils';
-import type { CaseIncomeField, CaseLiabilityField, CaseBankResult } from '@/lib/case';
+import type { CaseIncomeField, CaseLiabilityField, CaseBankResult, Stage2BankDebugRow } from '@/lib/case';
 
 interface DebugPanelProps {
   incomeFields: CaseIncomeField[];
@@ -26,12 +26,14 @@ interface DebugPanelProps {
   residencyStatus: string;
   nationality: string;
   emirate: string;
+  stage2DebugRows: Stage2BankDebugRow[];
 }
 
 export default function DebugPanel({
   incomeFields, liabilityFields, totalIncome, totalLiabilities,
   loanAmount, stressRate, tenorMonths, bankResults,
   employmentType, residencyStatus, nationality, emirate,
+  stage2DebugRows,
 }: DebugPanelProps) {
   const [visible, setVisible] = useState(false);
   const [incomeOpen, setIncomeOpen] = useState(true);
@@ -78,8 +80,26 @@ export default function DebugPanel({
       bank: r.bank.bankName, stressRate: r.stressRate, stressEMI: r.stressEMI,
       dbr: r.dbr, dbrLimit: r.dbrLimit, eligible: r.eligible,
     })));
+    console.table(stage2DebugRows.map(row => ({
+      bank: row.bankName,
+      stage1MinSalarySource: row.stage1MinSalarySource,
+      stage1MinSalaryValue: row.stage1MinSalaryValue,
+      stage2MinSalarySource: row.stage2MinSalarySource,
+      stage2MinSalaryRawValue: row.stage2MinSalaryRawValue,
+      stage2MinSalaryParsedValue: row.stage2MinSalaryParsedValue,
+      dbrLimitSource: row.dbrLimitSource,
+      dbrLimitValue: row.dbrLimitValue,
+      minLoanSource: row.minLoanSource,
+      minLoanValue: row.minLoanValue,
+      maxLoanSource: row.maxLoanSource,
+      maxLoanValue: row.maxLoanValue,
+      stage1Outcome: row.stage1Outcome,
+      stage2Outcome: row.stage2Outcome,
+      productEligibilityIncluded: row.productEligibilityIncluded,
+      productEligibilityReason: row.productEligibilityReason,
+    })));
     console.groupEnd();
-  }, [visible, incomeFields, liabilityFields, totalIncome, totalLiabilities, loanAmount, stressRate, tenorMonths, bankResults]);
+  }, [visible, incomeFields, liabilityFields, totalIncome, totalLiabilities, loanAmount, stressRate, tenorMonths, bankResults, employmentType, residencyStatus, nationality, emirate, stage2DebugRows]);
 
   if (!visible) {
     return (
@@ -240,7 +260,7 @@ export default function DebugPanel({
         <Collapsible open={stage2Open} onOpenChange={setStage2Open}>
           <CollapsibleTrigger className="flex items-center gap-1 font-bold text-foreground">
             {stage2Open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            Stage 2 — Policy Check Inputs
+            Stage 2 — Policy Inputs & Rule Sources
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1 text-[10px]">
@@ -261,6 +281,42 @@ export default function DebugPanel({
               <span className="text-muted-foreground">Total Income (for min salary):</span>
               <span className="text-right font-semibold">AED {formatCurrency(Math.round(totalIncome))}</span>
             </div>
+
+            {stage2DebugRows.length > 0 && (
+              <table className="w-full mt-2 text-[10px]">
+                <thead>
+                  <tr className="text-muted-foreground border-b border-border/30">
+                    <th className="text-left py-1">Bank</th>
+                    <th className="text-left py-1">Salary</th>
+                    <th className="text-left py-1">DBR / Loan</th>
+                    <th className="text-left py-1">Outcomes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stage2DebugRows.map(row => (
+                    <tr key={row.bankId} className="border-t border-border/30 align-top">
+                      <td className="py-1 pr-2 font-semibold">{row.bankName}</td>
+                      <td className="py-1 pr-2">
+                        <div>Stage 1: {row.stage1MinSalarySource} = {row.stage1MinSalaryValue != null ? `AED ${formatCurrency(row.stage1MinSalaryValue)}` : 'n/a'}</div>
+                        <div>Stage 2 src: {row.stage2MinSalarySource ?? 'n/a'}</div>
+                        <div>Raw: {row.stage2MinSalaryRawValue ?? 'n/a'}</div>
+                        <div>Parsed: {row.stage2MinSalaryParsedValue != null ? `AED ${formatCurrency(row.stage2MinSalaryParsedValue)}` : 'n/a'}</div>
+                      </td>
+                      <td className="py-1 pr-2">
+                        <div>{row.dbrLimitSource} = {row.dbrLimitValue != null ? `${row.dbrLimitValue.toFixed(2)}%` : 'n/a'}</div>
+                        <div>{row.minLoanSource} = {row.minLoanValue != null ? `AED ${formatCurrency(row.minLoanValue)}` : 'n/a'}</div>
+                        <div>{row.maxLoanSource} = {row.maxLoanValue != null ? `AED ${formatCurrency(row.maxLoanValue)}` : 'n/a'}</div>
+                      </td>
+                      <td className="py-1">
+                        <div>Stage 1: {row.stage1Outcome}</div>
+                        <div>Stage 2: {row.stage2Outcome}</div>
+                        <div>{row.productEligibilityIncluded ? 'Included' : 'Excluded'} — {row.productEligibilityReason}</div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </CollapsibleContent>
         </Collapsible>
       </div>

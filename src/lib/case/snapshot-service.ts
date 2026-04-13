@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/mortgage-utils';
 import type { CaseBankResult } from './stage1-engine';
+import type { Stage2BankEvaluation } from './stage2-engine';
 import type { ProductData } from '@/components/results/CostBreakdownSection';
 import type { QualNote } from '@/components/results/BankEligibilityTable';
 import type {
@@ -27,6 +28,8 @@ interface SaveParams {
   liabilityFields: CaseLiabilityField[];
   coBorrowers: CaseCoBorrower[];
   bankResults: CaseBankResult[];
+  stage2ByBank: Record<string, Stage2BankEvaluation>;
+  finalEligibleBankIds: string[];
   productsByBank: Record<string, ProductData>;
   qualNotes: QualNote[];
   effectiveTenor: number;
@@ -35,11 +38,15 @@ interface SaveParams {
 function buildSavedBankResults(
   bankResults: CaseBankResult[],
   productsByBank: Record<string, ProductData>,
-  qualNotes: QualNote[]
+  qualNotes: QualNote[],
+  stage2ByBank: Record<string, Stage2BankEvaluation>,
 ) {
   return bankResults.map(r => {
     const product = productsByBank[r.bank.id];
     const noteCount = qualNotes.filter(n => n.bank_id === r.bank.id).length;
+    const stage2 = stage2ByBank[r.bank.id];
+    const finalEligible = stage2?.finalEligible ?? r.eligible;
+
     return {
       bank_name: r.bank.bankName,
       stress_rate: r.stressRate,
@@ -47,7 +54,12 @@ function buildSavedBankResults(
       dbr_percent: Math.round(r.dbr * 10) / 10,
       dbr_limit: r.dbrLimit,
       min_salary_met: r.minSalaryMet,
-      eligible: r.eligible,
+      stage1_eligible: r.eligible,
+      stage2_passed: stage2?.summary.passed ?? null,
+      stage2_total: stage2?.summary.total ?? null,
+      stage2_critical_fail: stage2?.summary.criticalFail ?? null,
+      stage2_critical_pass: stage2?.summary.criticalPass ?? null,
+      eligible: finalEligible,
       product_rate: product?.rate != null ? Math.round((product.rate as number) * 10000) / 100 : null,
       fixed_period: product?.fixed_period ?? null,
       qualification_notes_count: noteCount,
@@ -62,9 +74,11 @@ function buildSavedCostComparison(
   propertyValue: number,
   nominalRate: number,
   effectiveTenor: number,
-  emirate: string
+  emirate: string,
+  finalEligibleBankIds: string[],
 ) {
-  const approved = bankResults.filter(r => r.eligible);
+  const approvedSet = new Set(finalEligibleBankIds);
+  const approved = bankResults.filter(r => approvedSet.has(r.bank.id));
   if (approved.length === 0 || !loanAmount) return [];
 
   const isDubai = emirate === 'dubai';
@@ -123,13 +137,13 @@ function buildSavedCostComparison(
 export async function saveQualificationSnapshot(params: SaveParams): Promise<string> {
   const {
     userId, editApplicantId, applicant, property, incomeFields, liabilityFields,
-    coBorrowers, bankResults, productsByBank, qualNotes, effectiveTenor,
+    coBorrowers, bankResults, stage2ByBank, finalEligibleBankIds, productsByBank, qualNotes, effectiveTenor,
   } = params;
 
-  const savedBankResults = buildSavedBankResults(bankResults, productsByBank, qualNotes);
+  const savedBankResults = buildSavedBankResults(bankResults, productsByBank, qualNotes, stage2ByBank);
   const savedCostComparison = buildSavedCostComparison(
     bankResults, productsByBank, property.loanAmount, property.propertyValue,
-    property.nominalRate, effectiveTenor, property.emirate
+    property.nominalRate, effectiveTenor, property.emirate, finalEligibleBankIds
   );
   const representativeDbr = savedBankResults.length > 0 ? savedBankResults[0].dbr_percent : null;
 
