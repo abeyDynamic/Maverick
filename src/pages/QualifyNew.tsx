@@ -399,12 +399,46 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     [bankResults, policyTerms, totalIncome, loanAmount, nationality, emirate, empType, resolvedSegment]
   );
 
-  const finalEligibleBankIds = useMemo(
-    () => Object.values(stage2ByBank)
-      .filter(entry => entry.productEligible)
-      .map(entry => entry.bankId),
-    [stage2ByBank]
-  );
+  // ── Structured rules evaluation per bank ──
+  const structuredEvalByBank = useMemo<Record<string, BankStructuredEvaluation>>(() => {
+    if (eligibilityRules.length === 0 && incomePolicies.length === 0) return {};
+    const result: Record<string, BankStructuredEvaluation> = {};
+    for (const br of bankResults) {
+      result[br.bank.id] = evaluateStructuredRulesForBank(
+        br.bank.id,
+        eligibilityRules,
+        incomePolicies,
+        qualProfile as any,
+        {
+          totalIncome,
+          loanAmount,
+          ltv,
+          tenorMonths: effectiveTenor,
+          lobMonths: seInfo.lengthOfBusinessMonths,
+          nationality,
+          emirate,
+        },
+      );
+    }
+    return result;
+  }, [bankResults, eligibilityRules, incomePolicies, qualProfile, totalIncome, loanAmount, ltv, effectiveTenor, seInfo.lengthOfBusinessMonths, nationality, emirate]);
+
+  // ── Final eligibility: combine Stage 1, Stage 2 (legacy), and structured rules ──
+  const finalEligibleBankIds = useMemo(() => {
+    return Object.values(stage2ByBank)
+      .filter(entry => {
+        // Legacy stage2 check
+        if (!entry.productEligible) return false;
+        // If structured rules exist for this bank, also require no critical fail
+        const structured = structuredEvalByBank[entry.bankId];
+        if (structured && structured.ruleResults.length > 0) {
+          if (structured.hasCriticalFail) return false;
+          if (!structured.isAutomatable) return false;
+        }
+        return true;
+      })
+      .map(entry => entry.bankId);
+  }, [stage2ByBank, structuredEvalByBank]);
 
   const finalEligibleBankIdSet = useMemo(
     () => new Set(finalEligibleBankIds),
@@ -416,18 +450,28 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     [bankResults, finalEligibleBankIdSet]
   );
 
+  // ── Product filtering: respect segment/doc/route fields on products ──
   const productsByBank = useMemo<Record<string, ProductData>>(
-    () => matchProductsToBank(
-      productRows.filter(product => finalEligibleBankIdSet.has(product.bank_id)),
-      {
+    () => {
+      const segmentFilteredProducts = productRows.filter(product => {
+        if (!finalEligibleBankIdSet.has(product.bank_id)) return false;
+        // Filter by product segment/doc/route fields if they exist
+        const p = product as any;
+        if (p.employment_subtype && p.employment_subtype !== qualProfile.employmentSubtype) return false;
+        if (p.doc_path && p.doc_path !== qualProfile.docPath) return false;
+        if (p.route_type && p.route_type !== qualProfile.routeType) return false;
+        if (p.manual_only) return false;
+        return true;
+      });
+      return matchProductsToBank(segmentFilteredProducts, {
         applicantResidency: getApplicantResidency(residency),
         applicantSegment: getApplicantSegment(empType),
         preferredFixedMonths: DEFAULT_COMPARISON_FIXED_MONTHS,
         preferredTransactionType: txnType,
         salaryTransfer,
-      }
-    ),
-    [productRows, finalEligibleBankIdSet, residency, empType, txnType, salaryTransfer]
+      });
+    },
+    [productRows, finalEligibleBankIdSet, residency, empType, txnType, salaryTransfer, qualProfile]
   );
 
   const stage2DebugRows = useMemo(
