@@ -861,6 +861,8 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         nationality={nationality}
         emirate={emirate}
         stage2DebugRows={stage2DebugRows}
+        segment={resolvedSegment}
+        segmentRoute={segment === 'self_employed' ? `SE/${seInfo.docType || 'unset'}` : segment === 'non_resident' ? `NR/${nrInfo.dabRequired ? 'DAB' : 'standard'}` : 'resident_salaried'}
       />
     </div>
   );
