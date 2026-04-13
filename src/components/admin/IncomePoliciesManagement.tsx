@@ -236,7 +236,7 @@ export default function IncomePoliciesManagement() {
             </div>
             <div>
               <Label className="text-xs">Averaging Method</Label>
-              <Select value={form.averaging_method ?? ''} onValueChange={v => setForm(p => ({ ...p, averaging_method: v === '__none__' ? null : v }))}>
+              <Select value={form.averaging_method ?? '__none__'} onValueChange={v => setForm(p => ({ ...p, averaging_method: v === '__none__' ? null : v }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="None" /></SelectTrigger>
                 <SelectContent><SelectItem value="__none__">None</SelectItem>{AVERAGING_METHODS.filter(Boolean).map(m => <SelectItem key={m} value={m}>{m.replace(/_/g, ' ')}</SelectItem>)}</SelectContent>
               </Select>
@@ -247,7 +247,7 @@ export default function IncomePoliciesManagement() {
             </div>
             <div>
               <Label className="text-xs">Employment Subtype</Label>
-              <Select value={form.employment_subtype ?? ''} onValueChange={v => setForm(p => ({ ...p, employment_subtype: v === '__none__' ? null : v }))}>
+              <Select value={form.employment_subtype ?? '__none__'} onValueChange={v => setForm(p => ({ ...p, employment_subtype: v === '__none__' ? null : v }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">Any</SelectItem>
@@ -257,7 +257,7 @@ export default function IncomePoliciesManagement() {
             </div>
             <div>
               <Label className="text-xs">Doc Path</Label>
-              <Select value={form.doc_path ?? ''} onValueChange={v => setForm(p => ({ ...p, doc_path: v === '__none__' ? null : v }))}>
+              <Select value={form.doc_path ?? '__none__'} onValueChange={v => setForm(p => ({ ...p, doc_path: v === '__none__' ? null : v }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">Any</SelectItem>
@@ -267,7 +267,7 @@ export default function IncomePoliciesManagement() {
             </div>
             <div>
               <Label className="text-xs">Route Type</Label>
-              <Select value={form.route_type ?? ''} onValueChange={v => setForm(p => ({ ...p, route_type: v === '__none__' ? null : v }))}>
+              <Select value={form.route_type ?? '__none__'} onValueChange={v => setForm(p => ({ ...p, route_type: v === '__none__' ? null : v }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">Any</SelectItem>
