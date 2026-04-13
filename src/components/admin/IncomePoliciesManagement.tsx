@@ -11,8 +11,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { Plus, Save, Edit2 } from 'lucide-react';
 
-const SEGMENTS = ['resident_salaried', 'self_employed', 'non_resident'];
-const INCOME_TYPES = ['basic_salary', 'housing_allowance', 'transport_allowance', 'other_allowance', 'commission', 'bonus', 'rental_income', 'business_income', 'freelance_income', 'pension'];
+const SEGMENTS = ['resident', 'non_resident'];
+const EMPLOYMENT_SUBTYPES = ['salaried', 'self_employed'];
+const DOC_PATHS = ['standard', 'full_doc', 'low_doc', 'na'];
+const ROUTE_TYPES = ['dbr', 'dab', 'both', 'manual'];
+const INCOME_TYPES = [
+  'basic_salary', 'housing_allowance', 'transport_allowance', 'other_allowance',
+  'bonus_fixed', 'bonus_variable', 'commission_variable',
+  'rental_income_1', 'rental_income_2', 'other_income',
+  'business_income', 'freelance_income', 'pension',
+];
 const AVERAGING_METHODS = ['', 'simple_average', 'weighted_average', 'lowest_of_period'];
 
 interface IncomePolicy {
@@ -35,7 +43,7 @@ interface IncomePolicy {
 }
 
 const EMPTY_POLICY: Omit<IncomePolicy, 'id' | 'bank_name'> = {
-  bank_id: '', segment: 'resident_salaried', employment_subtype: null, doc_path: null,
+  bank_id: '', segment: 'resident', employment_subtype: null, doc_path: null,
   route_type: null, income_type: 'basic_salary', consideration_pct: 100,
   income_basis: null, averaging_method: null, averaging_months: null,
   requires_documents: false, conditions: null, notes: null, active: true,
@@ -239,15 +247,33 @@ export default function IncomePoliciesManagement() {
             </div>
             <div>
               <Label className="text-xs">Employment Subtype</Label>
-              <Input className="h-8 text-sm" value={form.employment_subtype ?? ''} onChange={e => setForm(p => ({ ...p, employment_subtype: e.target.value || null }))} />
+              <Select value={form.employment_subtype ?? ''} onValueChange={v => setForm(p => ({ ...p, employment_subtype: v || null }))}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Any" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Any</SelectItem>
+                  {EMPLOYMENT_SUBTYPES.map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs">Doc Path</Label>
-              <Input className="h-8 text-sm" value={form.doc_path ?? ''} onChange={e => setForm(p => ({ ...p, doc_path: e.target.value || null }))} />
+              <Select value={form.doc_path ?? ''} onValueChange={v => setForm(p => ({ ...p, doc_path: v || null }))}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Any" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Any</SelectItem>
+                  {DOC_PATHS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs">Route Type</Label>
-              <Input className="h-8 text-sm" value={form.route_type ?? ''} onChange={e => setForm(p => ({ ...p, route_type: e.target.value || null }))} />
+              <Select value={form.route_type ?? ''} onValueChange={v => setForm(p => ({ ...p, route_type: v || null }))}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Any" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Any</SelectItem>
+                  {ROUTE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div className="col-span-2">
               <Label className="text-xs">Conditions</Label>
