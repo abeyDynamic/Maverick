@@ -20,254 +20,72 @@ import { LiabilityFieldCard, LiabilityEntry, createLiabilityEntry } from '@/comp
 import { CoBorrowerSection, CoBorrowerData, createCoBorrower } from '@/components/qualify/CoBorrowerSection';
 import DBRSummaryBar from '@/components/results/DBRSummaryBar';
 import GlobalTickerBar from '@/components/GlobalTickerBar';
-import BankEligibilityTable, { useBankResults, buildWhatIfAnalysis } from '@/components/results/BankEligibilityTable';
+import BankEligibilityTable from '@/components/results/BankEligibilityTable';
 import WhatIfChat from '@/components/results/WhatIfChat';
 import CostBreakdownSection, { type ProductData } from '@/components/results/CostBreakdownSection';
 import {
   COUNTRIES, INCOME_TYPES, LIABILITY_TYPES, TRANSACTION_TYPES, PROPERTY_TYPES,
   PURPOSES, LOAN_TYPE_PREFERENCES, EMIRATES,
-  normalizeToMonthly, isLimitType, formatCurrency, calculateMaxTenor,
-  getAgeFromDob, getTenorEligibility
+  formatCurrency,
 } from '@/lib/mortgage-utils';
 
-interface Bank {
-  id: string;
-  bank_name: string;
-  base_stress_rate: number | null;
-  min_salary: number;
-  dbr_limit: number;
-  max_tenor_months: number;
-  min_loan_amount: number;
-  max_loan_amount: number | null;
+// ── Engine imports ──
+import {
+  type CaseBank,
+  type CaseIncomeField,
+  type CaseLiabilityField,
+  type CaseCoBorrower,
+  toBankFromRow,
+  calcTotalIncome,
+  calcTotalLiabilities,
+  resolveBindingTenor,
+  getAgeFromDob,
+  getTenorEligibility,
+  calculateMaxTenor,
+  runStage1,
+  buildWhatIfAnalysis,
+  getApplicantSegment,
+  getApplicantResidency,
+  filterActiveProducts,
+  matchProductsToBank,
+  DEFAULT_COMPARISON_FIXED_MONTHS,
+  saveQualificationSnapshot,
+} from '@/lib/case';
+
+// ── Adapters: convert UI entries to Case engine fields ──
+function toEngineIncome(fields: IncomeEntry[]): CaseIncomeField[] {
+  return fields.map(f => ({
+    incomeType: f.income_type,
+    amount: f.amount,
+    percentConsidered: f.percent_considered,
+    recurrence: f.recurrence,
+  }));
 }
 
-type ProductRow = ProductData & {
-  active?: boolean | null;
-  life_ins_monthly?: number | string | null;
-  mortgage_type?: string | null;
-  processing_fee?: number | string | null;
-  prop_ins_annual?: number | string | null;
-  product_type?: string | null;
-  residency?: string | null;
-  segment?: string | null;
-  status?: string | null;
-  transaction_type?: string | null;
-  validity_end?: string | null;
-};
-
-interface ProductSelectionContext {
-  applicantResidency: string | null;
-  applicantSegment: string | null;
-  preferredFixedMonths: number;
-  preferredTransactionType: string;
-  salaryTransfer: boolean;
+function toEngineLiability(fields: LiabilityEntry[]): CaseLiabilityField[] {
+  return fields.map(f => ({
+    liabilityType: f.liability_type,
+    amount: f.amount,
+    creditCardLimit: f.credit_card_limit,
+    recurrence: f.recurrence,
+    closedBeforeApplication: f.closed_before_application,
+    liabilityLetterObtained: f.liability_letter_obtained,
+  }));
 }
 
-const DEFAULT_COMPARISON_FIXED_MONTHS = 24;
-
-function normalizeMatchValue(value: string | null | undefined): string {
-  return (value ?? '')
-    .toLowerCase()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
+function toEngineCoBorrowers(cbs: CoBorrowerData[]): CaseCoBorrower[] {
+  return cbs.map(cb => ({
+    name: cb.name,
+    relationship: cb.relationship,
+    employmentType: cb.employment_type,
+    dateOfBirth: cb.date_of_birth,
+    residencyStatus: cb.residency_status,
+    incomeFields: toEngineIncome(cb.incomeFields),
+    liabilityFields: toEngineLiability(cb.liabilityFields),
+    selectedIncomeTypes: cb.selectedIncomeTypes,
+    selectedLiabilityTypes: cb.selectedLiabilityTypes,
+  }));
 }
-
-function toNullableNumber(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-
-  if (typeof value === 'string') {
-    const cleaned = value.replace(/[^0-9.-]+/g, '');
-    if (!cleaned) return null;
-
-    const parsed = Number(cleaned);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-
-  return null;
-}
-
-/** Normalize processing fee to a percentage value (e.g. 1 for 1%).
- *  Handles: decimal form (0.01 → 1%), percentage form (1 → 1%), absurd values (>10 → null) */
-function normalizeProcessingFeePercent(value: number | null): number | null {
-  if (value === null) return null;
-  // If stored as decimal (e.g. 0.01 for 1%), convert to percentage
-  if (value > 0 && value < 0.5) return value * 100;
-  // If clearly unreasonable (>10%), likely a flat fee or data error — ignore
-  if (value > 10) return null;
-  return value;
-}
-
-/** Normalize product rate to annual decimal form (e.g. 0.0399 stays 0.0399, 3.99 becomes 0.0399) */
-function normalizeRateToDecimal(rate: number | null): number | null {
-  if (rate === null) return null;
-  return rate > 1 ? rate / 100 : rate;
-}
-
-function getApplicantSegment(employmentType: string): string | null {
-  const normalized = normalizeMatchValue(employmentType);
-  if (!normalized) return null;
-  if (normalized.includes('salary')) return 'salaried';
-  if (normalized.includes('self')) return 'self_employed';
-  return null;
-}
-
-function getApplicantResidency(residencyStatus: string): string | null {
-  const normalized = normalizeMatchValue(residencyStatus);
-  if (!normalized) return null;
-  return normalized === 'non_resident' ? 'non_resident' : 'resident_expat';
-}
-
-function parseFixedPeriodMonths(product: Pick<ProductRow, 'fixed_period' | 'fixed_period_months'>): number | null {
-  const fixedPeriodMonths = toNullableNumber(product.fixed_period_months);
-  if (fixedPeriodMonths !== null) {
-    return fixedPeriodMonths;
-  }
-
-  const fixedPeriod = product.fixed_period?.toLowerCase().trim();
-  if (!fixedPeriod || fixedPeriod.includes('variable')) return null;
-
-  const yearMatch = fixedPeriod.match(/(\d+)\s*yr/);
-  if (yearMatch) return Number(yearMatch[1]) * 12;
-
-  const monthMatch = fixedPeriod.match(/(\d+)\s*(?:month|months|m)\b/);
-  if (monthMatch) return Number(monthMatch[1]);
-
-  return null;
-}
-
-function formatRateValue(rate: number): string {
-  return rate.toFixed(2);
-}
-
-function matchesApplicantSegment(productSegment: string | null | undefined, applicantSegment: string | null): boolean {
-  if (!applicantSegment) return true;
-
-  const normalizedSegment = normalizeMatchValue(productSegment);
-  if (!normalizedSegment || ['all', 'any', 'both'].includes(normalizedSegment)) return true;
-
-  return normalizedSegment === applicantSegment;
-}
-
-function matchesApplicantResidency(productResidency: string | null | undefined, applicantResidency: string | null): boolean {
-  if (!applicantResidency) return true;
-
-  const normalizedResidency = normalizeMatchValue(productResidency);
-  if (!normalizedResidency || ['all', 'any', 'both'].includes(normalizedResidency)) return true;
-
-  if (applicantResidency === 'non_resident') {
-    return normalizedResidency === 'non_resident';
-  }
-
-  return [
-    'resident_expat',
-    'resident',
-    'expat',
-    'uae_national',
-    'national',
-  ].includes(normalizedResidency);
-}
-
-function getTransactionMatchPriority(productTransactionType: string | null | undefined, preferredTransactionType: string): number {
-  const normalizedProductTransaction = normalizeMatchValue(productTransactionType);
-  const normalizedPreferredTransaction = normalizeMatchValue(preferredTransactionType);
-
-  if (!normalizedPreferredTransaction) return 0;
-  if (!normalizedProductTransaction || ['all', 'any', 'both'].includes(normalizedProductTransaction)) return 1;
-  if (normalizedProductTransaction === normalizedPreferredTransaction) return 0;
-
-  if (
-    normalizedPreferredTransaction === 'handover_resale' &&
-    ['handover', 'resale'].includes(normalizedProductTransaction)
-  ) {
-    return 1;
-  }
-
-  if (normalizedPreferredTransaction === 'buyout_equity' && normalizedProductTransaction === 'buyout') {
-    return 1;
-  }
-
-  return 2;
-}
-
-function formatMatchedRateLabel(product: ProductRow): string {
-  const fixedMonths = parseFixedPeriodMonths(product);
-  const fixedLabel = fixedMonths
-    ? `${fixedMonths % 12 === 0 ? `${fixedMonths / 12}yr` : `${fixedMonths}m`} fixed`
-    : 'variable';
-  const salaryTransferLabel = product.salary_transfer ? ' STL' : '';
-  const rate = normalizeRateToDecimal(toNullableNumber(product.rate)) ?? 0;
-
-  return `Rate: ${formatRateValue(rate * 100)}% (${fixedLabel}${salaryTransferLabel})`;
-}
-
-function selectPreferredProduct(products: ProductRow[], context: ProductSelectionContext): ProductData | null {
-  if (products.length === 0) return null;
-
-  const matchedProducts = products.filter(product => (
-    matchesApplicantSegment(product.segment, context.applicantSegment) &&
-    matchesApplicantResidency(product.residency, context.applicantResidency)
-  ));
-
-  const ratedProducts = matchedProducts
-    .map(product => ({
-      ...product,
-      fixedMonths: parseFixedPeriodMonths(product),
-      numericRate: normalizeRateToDecimal(toNullableNumber(product.rate)),
-      transactionPriority: getTransactionMatchPriority(product.transaction_type, context.preferredTransactionType),
-    }))
-    .filter(product => product.numericRate !== null);
-
-  if (ratedProducts.length === 0) return null;
-
-  const chosen = [...ratedProducts].sort((a, b) => {
-    if (a.transactionPriority !== b.transactionPriority) {
-      return a.transactionPriority - b.transactionPriority;
-    }
-
-    if (context.salaryTransfer) {
-      const salaryTransferPriorityA = a.salary_transfer === true ? 0 : 1;
-      const salaryTransferPriorityB = b.salary_transfer === true ? 0 : 1;
-      if (salaryTransferPriorityA !== salaryTransferPriorityB) {
-        return salaryTransferPriorityA - salaryTransferPriorityB;
-      }
-    }
-
-    const fixedPeriodPriorityA = a.fixedMonths === context.preferredFixedMonths ? 0 : a.fixedMonths === null ? 2 : 1;
-    const fixedPeriodPriorityB = b.fixedMonths === context.preferredFixedMonths ? 0 : b.fixedMonths === null ? 2 : 1;
-    if (fixedPeriodPriorityA !== fixedPeriodPriorityB) {
-      return fixedPeriodPriorityA - fixedPeriodPriorityB;
-    }
-
-    const fixedPeriodDistanceA = a.fixedMonths === null ? Number.POSITIVE_INFINITY : Math.abs(a.fixedMonths - context.preferredFixedMonths);
-    const fixedPeriodDistanceB = b.fixedMonths === null ? Number.POSITIVE_INFINITY : Math.abs(b.fixedMonths - context.preferredFixedMonths);
-    if (fixedPeriodDistanceA !== fixedPeriodDistanceB) {
-      return fixedPeriodDistanceA - fixedPeriodDistanceB;
-    }
-
-    return (a.numericRate ?? Number.POSITIVE_INFINITY) - (b.numericRate ?? Number.POSITIVE_INFINITY);
-  })[0];
-
-  if (!chosen) return null;
-
-  return {
-    bank_id: chosen.bank_id,
-    rate: chosen.numericRate,
-    fixed_period_months: chosen.fixedMonths,
-    processing_fee_percent: normalizeProcessingFeePercent(toNullableNumber(chosen.processing_fee_percent) ?? toNullableNumber(chosen.processing_fee)),
-    valuation_fee: toNullableNumber(chosen.valuation_fee),
-    life_ins_monthly_percent: toNullableNumber(chosen.life_ins_monthly_percent) ?? toNullableNumber(chosen.life_ins_monthly),
-    prop_ins_annual_percent: toNullableNumber(chosen.prop_ins_annual_percent) ?? toNullableNumber(chosen.prop_ins_annual),
-    follow_on_margin: toNullableNumber(chosen.follow_on_margin),
-    eibor_benchmark: chosen.eibor_benchmark ?? null,
-    salary_transfer: chosen.salary_transfer ?? false,
-    fixed_period: chosen.fixed_period ?? null,
-    comparison_fixed_months: context.preferredFixedMonths,
-    rate_label: formatMatchedRateLabel(chosen),
-  };
-}
-
-// QualNote imported from BankEligibilityTable
 
 interface QualifyNewProps {
   editApplicantId?: string;
@@ -279,7 +97,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   const [saving, setSaving] = useState(false);
 
   // Banks, notes & products from Supabase
-  const [banks, setBanks] = useState<Bank[]>([]);
+  const [banks, setBanks] = useState<CaseBank[]>([]);
   const [qualNotes, setQualNotes] = useState<QualNote[]>([]);
   const [productsByBank, setProductsByBank] = useState<Record<string, ProductData>>({});
 
@@ -289,7 +107,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         supabase.from('banks').select('*').eq('active', true),
         supabase.from('qualification_notes').select('*').eq('active', true),
       ]);
-      setBanks((bankRes.data ?? []) as any);
+      setBanks((bankRes.data ?? []).map(toBankFromRow));
       setQualNotes((notesRes.data ?? []) as any);
     }
     loadBanks();
@@ -320,55 +138,20 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   const [nominalRate, setNominalRate] = useState(4.5);
   const [stressRate, setStressRate] = useState(7.5);
 
-  // Fetch products and select the best-matched rate per bank for cost comparison
+  // Fetch products via product engine
   useEffect(() => {
     async function loadProducts() {
-      const applicantSegment = getApplicantSegment(empType);
-      const applicantResidency = getApplicantResidency(residency);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const { data } = await supabase
-        .from('products')
-        .select('*') as any;
-
-      const filteredProducts = ((data ?? []) as ProductRow[]).filter(product => {
-        if (!product.bank_id || toNullableNumber(product.rate) === null) return false;
-        if (typeof product.active === 'boolean' && !product.active) return false;
-        if (product.status && normalizeMatchValue(product.status) !== 'active') return false;
-
-        if (product.validity_end) {
-          const validityEnd = new Date(product.validity_end);
-          validityEnd.setHours(0, 0, 0, 0);
-          if (!(validityEnd > today)) return false;
-        }
-
-        return true;
+      const { data } = await supabase.from('products').select('*') as any;
+      const active = filterActiveProducts(data ?? []);
+      const map = matchProductsToBank(active, {
+        applicantResidency: getApplicantResidency(residency),
+        applicantSegment: getApplicantSegment(empType),
+        preferredFixedMonths: DEFAULT_COMPARISON_FIXED_MONTHS,
+        preferredTransactionType: txnType,
+        salaryTransfer,
       });
-
-      const groupedProducts = filteredProducts.reduce<Record<string, ProductRow[]>>((acc, product) => {
-        if (!acc[product.bank_id]) acc[product.bank_id] = [];
-        acc[product.bank_id].push(product);
-        return acc;
-      }, {});
-
-      const map: Record<string, ProductData> = {};
-      Object.entries(groupedProducts).forEach(([bankId, bankProducts]) => {
-        const selectedProduct = selectPreferredProduct(bankProducts, {
-          applicantResidency,
-          applicantSegment,
-          preferredFixedMonths: DEFAULT_COMPARISON_FIXED_MONTHS,
-          preferredTransactionType: txnType,
-          salaryTransfer,
-        });
-        if (selectedProduct) {
-          map[bankId] = selectedProduct;
-        }
-      });
-
       setProductsByBank(map);
     }
-
     loadProducts();
   }, [txnType, salaryTransfer, empType, residency]);
 
@@ -409,7 +192,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         setTenorMonths(prop.preferred_tenor_months || 300);
         setNominalRate(prop.nominal_rate || 4.5);
         setStressRate(prop.stress_rate || 7.5);
-        // salary_transfer may not be in property_details; keep default
       }
 
       const incData = (incRes.data ?? []) as any[];
@@ -484,70 +266,76 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   // Section 5 — Co-borrowers
   const [coBorrowers, setCoBorrowers] = useState<CoBorrowerData[]>([]);
 
-  // Derived — tenor eligibility
+  // ── Derived values via engines ──
   const mainAge = useMemo(() => getAgeFromDob(dob), [dob]);
   const mainTenorElig = useMemo(() => mainAge !== null ? getTenorEligibility(mainAge.totalMonths) : null, [mainAge]);
 
-  const { bindingTenor, bindingName } = useMemo(() => {
-    let minSalaried = mainTenorElig?.salaried ?? 300;
-    let minSelfEmployed = mainTenorElig?.selfEmployed ?? 300;
-    let bindName = 'Main Applicant';
-
-    coBorrowers.forEach((cb, i) => {
-      const cbAge = getAgeFromDob(cb.date_of_birth);
-      if (cbAge !== null) {
-        const cbElig = getTenorEligibility(cbAge.totalMonths);
-        if (cbElig.salaried < minSalaried) {
-          minSalaried = cbElig.salaried;
-          bindName = cb.name || `Co-Borrower ${i + 1}`;
-        }
-        if (cbElig.selfEmployed < minSelfEmployed) {
-          minSelfEmployed = cbElig.selfEmployed;
-        }
-      }
-    });
-
-    const binding = empType === 'self_employed' ? minSelfEmployed : minSalaried;
-    return { bindingTenor: Math.min(300, Math.max(0, binding)), bindingName: bindName };
-  }, [mainTenorElig, coBorrowers, empType]);
+  const { bindingTenor, bindingName } = useMemo(
+    () => resolveBindingTenor(dob, empType, toEngineCoBorrowers(coBorrowers)),
+    [dob, empType, coBorrowers]
+  );
 
   const maxTenor = useMemo(() => calculateMaxTenor(dob, empType), [dob, empType]);
 
-  const totalIncome = useMemo(() => {
-    let total = 0;
-    for (const f of incomeFields) {
-      total += normalizeToMonthly(f.amount * f.percent_considered / 100, f.recurrence);
-    }
-    for (const cb of coBorrowers) {
-      for (const f of cb.incomeFields) {
-        total += normalizeToMonthly(f.amount * f.percent_considered / 100, f.recurrence);
-      }
-    }
-    return total;
-  }, [incomeFields, coBorrowers]);
+  const engineIncomeFields = useMemo(() => toEngineIncome(incomeFields), [incomeFields]);
+  const engineLiabilityFields = useMemo(() => toEngineLiability(liabilityFields), [liabilityFields]);
+  const engineCoBorrowers = useMemo(() => toEngineCoBorrowers(coBorrowers), [coBorrowers]);
 
-  const totalLiabilities = useMemo(() => {
-    let total = 0;
-    const calcLiab = (fields: LiabilityEntry[]) => {
-      for (const f of fields) {
-        if (f.closed_before_application) continue;
-        if (isLimitType(f.liability_type)) total += f.credit_card_limit * 0.05;
-        else total += normalizeToMonthly(f.amount, f.recurrence);
-      }
-    };
-    calcLiab(liabilityFields);
-    for (const cb of coBorrowers) calcLiab(cb.liabilityFields);
-    return total;
-  }, [liabilityFields, coBorrowers]);
+  const totalIncome = useMemo(
+    () => calcTotalIncome(engineIncomeFields, engineCoBorrowers),
+    [engineIncomeFields, engineCoBorrowers]
+  );
+
+  const totalLiabilities = useMemo(
+    () => calcTotalLiabilities(engineLiabilityFields, engineCoBorrowers),
+    [engineLiabilityFields, engineCoBorrowers]
+  );
 
   const effectiveTenor = Math.min(tenorMonths, bindingTenor);
 
-  // Bank results for what-if
-  const bankResults = useBankResults(banks, totalIncome, totalLiabilities, loanAmount, effectiveTenor, stressRate);
-  const whatIfAnalysis = useMemo(
-    () => buildWhatIfAnalysis(bankResults, totalIncome, totalLiabilities, liabilityFields),
-    [bankResults, totalIncome, totalLiabilities, liabilityFields]
+  // ── Stage 1 via engine ──
+  const bankResults = useMemo(
+    () => runStage1(banks, totalIncome, totalLiabilities, loanAmount, effectiveTenor, stressRate),
+    [banks, totalIncome, totalLiabilities, loanAmount, effectiveTenor, stressRate]
   );
+
+  const whatIfAnalysis = useMemo(
+    () => buildWhatIfAnalysis(bankResults, totalIncome, totalLiabilities, engineLiabilityFields),
+    [bankResults, totalIncome, totalLiabilities, engineLiabilityFields]
+  );
+
+  // ── Legacy Bank interface adapter for components that still expect it ──
+  const legacyBanks = useMemo(() => banks.map(b => ({
+    id: b.id,
+    bank_name: b.bankName,
+    base_stress_rate: b.baseStressRate,
+    min_salary: b.minSalary,
+    dbr_limit: b.dbrLimit,
+    max_tenor_months: b.maxTenorMonths,
+    min_loan_amount: b.minLoanAmount,
+    max_loan_amount: b.maxLoanAmount,
+  })), [banks]);
+
+  // ── Legacy BankResult adapter for CostBreakdownSection ──
+  const legacyBankResults = useMemo(() => bankResults.map(r => ({
+    bank: {
+      id: r.bank.id,
+      bank_name: r.bank.bankName,
+      base_stress_rate: r.bank.baseStressRate,
+      min_salary: r.bank.minSalary,
+      dbr_limit: r.bank.dbrLimit,
+      max_tenor_months: r.bank.maxTenorMonths,
+      min_loan_amount: r.bank.minLoanAmount,
+      max_loan_amount: r.bank.maxLoanAmount,
+    },
+    stressRate: r.stressRate,
+    stressEMI: r.stressEMI,
+    dbr: r.dbr,
+    dbrLimit: r.dbrLimit,
+    minSalaryMet: r.minSalaryMet,
+    dbrMet: r.dbrMet,
+    eligible: r.eligible,
+  })), [bankResults]);
 
   function handleIncomeTypesChange(types: string[]) {
     setSelectedIncomeTypes(types);
@@ -586,84 +374,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     if (val !== 'abu_dhabi') setIsAlAin(false);
   }
 
-  // Helper: build serializable bank_results JSONB
-  function buildSavedBankResults() {
-    return bankResults.map(r => {
-      const product = productsByBank[r.bank.id];
-      const noteCount = qualNotes.filter(n => n.bank_id === r.bank.id).length;
-      return {
-        bank_name: r.bank.bank_name,
-        stress_rate: r.stressRate,
-        monthly_emi: Math.round(r.stressEMI),
-        dbr_percent: Math.round(r.dbr * 10) / 10,
-        dbr_limit: r.dbrLimit,
-        min_salary_met: r.minSalaryMet,
-        eligible: r.eligible,
-        product_rate: product?.rate != null ? Math.round((product.rate as number) * 10000) / 100 : null,
-        fixed_period: product?.fixed_period ?? null,
-        qualification_notes_count: noteCount,
-      };
-    });
-  }
-
-  // Helper: build serializable cost_comparison JSONB
-  function buildSavedCostComparison() {
-    const approved = bankResults.filter(r => r.eligible);
-    if (approved.length === 0 || !loanAmount) return [];
-
-    const isDubaiAbuSharjah = ['dubai', 'abu_dhabi', 'sharjah'].includes(emirate);
-    const defaultValFee = isDubaiAbuSharjah ? 2500 : 3000;
-    const isDubai = emirate === 'dubai';
-
-    const calcEMI = (loan: number, annualRate: number, months: number) => {
-      if (!loan || !annualRate || !months) return 0;
-      const r = annualRate / 12;
-      if (r === 0) return loan / months;
-      return (loan * r * Math.pow(1 + r, months)) / (Math.pow(1 + r, months) - 1);
-    };
-
-    const entries = approved.map(r => {
-      const product = productsByBank[r.bank.id];
-      const usedRate = product?.rate ?? nominalRate / 100;
-      const lifeInsRate = product?.life_ins_monthly_percent ?? 0.00018;
-      const propInsRate = product?.prop_ins_annual_percent ?? 0.00035;
-      const rawProcFee = product?.processing_fee_percent;
-      const processingFeePercent = (rawProcFee !== null && rawProcFee !== undefined && rawProcFee >= 0 && rawProcFee <= 10) ? rawProcFee : 1;
-      const fixedMonths = product?.comparison_fixed_months ?? product?.fixed_period_months ?? 24;
-      const valFee = product?.valuation_fee ?? defaultValFee;
-
-      const emi = Math.round(calcEMI(loanAmount, usedRate, effectiveTenor));
-      const lifeIns = Math.round(loanAmount * lifeInsRate);
-      const propIns = Math.round((propertyValue * propInsRate) / 12);
-      const totalMonthly = emi + lifeIns + propIns;
-      const fixedPeriodTotal = totalMonthly * fixedMonths;
-
-      const dldFee = isDubai ? Math.round(propertyValue * 0.04 + 580) : 0;
-      const mortgageReg = Math.round(loanAmount * 0.0025 + 290);
-      const transferCentre = 4200;
-      const processingFeeAED = Math.round(loanAmount * processingFeePercent / 100);
-      const upfrontCosts = dldFee + mortgageReg + transferCentre + processingFeeAED + valFee;
-      const grandTotal = fixedPeriodTotal + upfrontCosts;
-
-      return {
-        bank_name: r.bank.bank_name,
-        nominal_rate: Math.round(usedRate * 10000) / 100,
-        monthly_emi: emi,
-        life_ins: lifeIns,
-        prop_ins: propIns,
-        total_monthly: totalMonthly,
-        fixed_period_total: fixedPeriodTotal,
-        upfront_costs: upfrontCosts,
-        grand_total: grandTotal,
-        rank: 0,
-      };
-    });
-
-    entries.sort((a, b) => a.fixed_period_total - b.fixed_period_total);
-    entries.forEach((e, i) => { e.rank = i; });
-    return entries;
-  }
-
+  // ── Save via snapshot service ──
   async function handleSave() {
     if (!user) return;
     if (!residency) { toast.error('Residency Status is required'); return; }
@@ -672,105 +383,30 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
     setSaving(true);
     try {
-      const savedBankResults = buildSavedBankResults();
-      const savedCostComparison = buildSavedCostComparison();
-      const representativeDbr = savedBankResults.length > 0 ? savedBankResults[0].dbr_percent : null;
-
-      let appId: string;
-
-      if (editApplicantId) {
-        // Update existing applicant
-        appId = editApplicantId;
-        await supabase.from('applicants').update({
-          full_name: clientName || null,
-          residency_status: residency,
+      const appId = await saveQualificationSnapshot({
+        userId: user.id,
+        editApplicantId,
+        applicant: {
+          fullName: clientName,
+          residencyStatus: residency,
           nationality,
-          date_of_birth: dob ? format(dob, 'yyyy-MM-dd') : null,
-          employment_type: empType || null,
-        } as any).eq('id', appId);
-
-        // Delete old related records and re-insert
-        await Promise.all([
-          supabase.from('property_details').delete().eq('applicant_id', appId),
-          supabase.from('income_fields').delete().eq('applicant_id', appId),
-          supabase.from('liability_fields').delete().eq('applicant_id', appId),
-          supabase.from('co_borrowers').delete().eq('applicant_id', appId),
-        ]);
-      } else {
-        // Create new applicant
-        const { data: applicant, error: appErr } = await supabase
-          .from('applicants')
-          .insert({
-            user_id: user.id,
-            full_name: clientName || null,
-            residency_status: residency,
-            nationality,
-            date_of_birth: dob ? format(dob, 'yyyy-MM-dd') : null,
-            employment_type: empType || null,
-          } as any)
-          .select('id')
-          .single();
-
-        if (appErr || !applicant) throw appErr || new Error('Failed to create applicant');
-        appId = applicant.id;
-      }
-
-      // Always insert a new qualification_results snapshot
-      await supabase.from('qualification_results').insert({
-        applicant_id: appId,
-        loan_amount: loanAmount || null,
-        dbr_percent: representativeDbr,
-        bank_results: savedBankResults,
-        cost_comparison: savedCostComparison,
-      } as any);
-
-      await supabase.from('property_details').insert({
-        applicant_id: appId,
-        property_value: propertyValue || null,
-        loan_amount: loanAmount || null,
-        ltv: ltv || null,
-        emirate,
-        is_difc: isDIFC,
-        is_al_ain: isAlAin,
-        transaction_type: txnType,
-        property_type: propertyType || null,
-        purpose: purpose || null,
-        loan_type_preference: loanTypePref,
-        preferred_tenor_months: effectiveTenor,
-        nominal_rate: nominalRate,
-        stress_rate: stressRate,
+          dateOfBirth: dob,
+          employmentType: empType,
+        },
+        property: {
+          propertyValue, loanAmount, ltv, emirate, isDIFC, isAlAin,
+          transactionType: txnType, salaryTransfer, propertyType, purpose,
+          loanTypePreference: loanTypePref, preferredTenorMonths: tenorMonths,
+          nominalRate, stressRate,
+        },
+        incomeFields: engineIncomeFields,
+        liabilityFields: engineLiabilityFields,
+        coBorrowers: engineCoBorrowers,
+        bankResults,
+        productsByBank,
+        qualNotes,
+        effectiveTenor,
       });
-
-      if (incomeFields.length > 0) {
-        await supabase.from('income_fields').insert(
-          incomeFields.map(f => ({ applicant_id: appId, income_type: f.income_type, amount: f.amount, percent_considered: f.percent_considered, recurrence: f.recurrence, owner_type: 'main' }))
-        );
-      }
-
-      if (liabilityFields.length > 0) {
-        await supabase.from('liability_fields').insert(
-          liabilityFields.map(f => ({ applicant_id: appId, liability_type: f.liability_type, amount: f.amount, credit_card_limit: f.credit_card_limit || null, recurrence: f.recurrence, closed_before_application: f.closed_before_application, liability_letter_obtained: f.liability_letter_obtained, owner_type: 'main' }))
-        );
-      }
-
-      for (let i = 0; i < coBorrowers.length; i++) {
-        const cb = coBorrowers[i];
-        await supabase.from('co_borrowers').insert({
-          applicant_id: appId, index: i, name: cb.name, relationship: cb.relationship,
-          employment_type: cb.employment_type, date_of_birth: cb.date_of_birth ? format(cb.date_of_birth, 'yyyy-MM-dd') : null,
-          residency_status: cb.residency_status,
-        });
-        if (cb.incomeFields.length > 0) {
-          await supabase.from('income_fields').insert(
-            cb.incomeFields.map(f => ({ applicant_id: appId, income_type: f.income_type, amount: f.amount, percent_considered: f.percent_considered, recurrence: f.recurrence, owner_type: 'co_borrower', co_borrower_index: i }))
-          );
-        }
-        if (cb.liabilityFields.length > 0) {
-          await supabase.from('liability_fields').insert(
-            cb.liabilityFields.map(f => ({ applicant_id: appId, liability_type: f.liability_type, amount: f.amount, credit_card_limit: f.credit_card_limit || null, recurrence: f.recurrence, closed_before_application: f.closed_before_application, liability_letter_obtained: f.liability_letter_obtained, owner_type: 'co_borrower', co_borrower_index: i }))
-          );
-        }
-      }
 
       toast.success('Qualification saved!');
       navigate(`/qualify/${appId}`);
@@ -1056,7 +692,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
               <p className="text-sm font-semibold text-primary">{clientName}</p>
             )}
 
-
             {/* Session Reminders — global notes above DBR bar */}
             <SessionRemindersPanel
               notes={qualNotes.filter(n => !n.bank_id)}
@@ -1076,7 +711,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
             {/* Bank Eligibility Table */}
             <BankEligibilityTable
-              banks={banks}
+              banks={legacyBanks}
               qualNotes={qualNotes}
               totalIncome={totalIncome}
               totalLiabilities={totalLiabilities}
@@ -1089,7 +724,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
             {/* Cost Breakdown */}
             <CostBreakdownSection
-              bankResults={bankResults}
+              bankResults={legacyBankResults}
               loanAmount={loanAmount}
               propertyValue={propertyValue}
               nominalRate={nominalRate}
