@@ -23,6 +23,7 @@ import GlobalTickerBar from '@/components/GlobalTickerBar';
 import BankEligibilityTable from '@/components/results/BankEligibilityTable';
 import WhatIfChat from '@/components/results/WhatIfChat';
 import CostBreakdownSection, { type ProductData } from '@/components/results/CostBreakdownSection';
+import DebugPanel from '@/components/qualify/DebugPanel';
 import {
   COUNTRIES, INCOME_TYPES, LIABILITY_TYPES, TRANSACTION_TYPES, PROPERTY_TYPES,
   PURPOSES, LOAN_TYPE_PREFERENCES, EMIRATES,
@@ -304,9 +305,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     [bankResults, totalIncome, totalLiabilities, engineLiabilityFields]
   );
 
-  // ── Legacy Bank interface adapter for components that still expect it ──
-  // Legacy Bank interface adapter for CostBreakdownSection — no longer needed,
-  // bankResults from the engine use CaseBank directly.
 
   function handleIncomeTypesChange(types: string[]) {
     setSelectedIncomeTypes(types);
