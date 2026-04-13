@@ -3,6 +3,39 @@
  * All engines read from and write to this structure.
  */
 
+/**
+ * Qualification segment — determines question set, engine routing, and product filtering.
+ */
+export type QualSegment = 'resident_salaried' | 'self_employed' | 'non_resident';
+
+export function deriveSegment(residencyStatus: string, employmentType: string): QualSegment {
+  if (residencyStatus === 'non_resident') return 'non_resident';
+  if (employmentType === 'self_employed') return 'self_employed';
+  return 'resident_salaried';
+}
+
+export interface SelfEmployedInfo {
+  docType: 'full_doc' | 'low_doc' | '';
+  businessName: string;
+  lengthOfBusinessMonths: number | null;   // months
+  incomeBasis: string;                      // 'audited_financials' | 'bank_statements' | 'trade_license' | ''
+}
+
+export interface NonResidentInfo {
+  countryOfResidence: string;
+  incomeSourceCountry: string;
+  dabRequired: boolean;                     // Debt Acknowledgement required
+  employmentTypeNR: string;                 // salaried or self_employed for NR sub-routing
+}
+
+export const EMPTY_SE_INFO: SelfEmployedInfo = {
+  docType: '', businessName: '', lengthOfBusinessMonths: null, incomeBasis: '',
+};
+
+export const EMPTY_NR_INFO: NonResidentInfo = {
+  countryOfResidence: '', incomeSourceCountry: '', dabRequired: false, employmentTypeNR: 'salaried',
+};
+
 export interface CaseApplicant {
   id?: string;
   fullName: string;
@@ -10,6 +43,9 @@ export interface CaseApplicant {
   nationality: string;
   dateOfBirth: Date | null;
   employmentType: string;        // 'salaried' | 'self_employed'
+  segment: QualSegment;
+  selfEmployedInfo?: SelfEmployedInfo;
+  nonResidentInfo?: NonResidentInfo;
 }
 
 export interface CaseProperty {
