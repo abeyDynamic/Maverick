@@ -12,8 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Save, Edit2 } from 'lucide-react';
 
-const SEGMENT_PATHS = ['resident_salaried', 'self_employed', 'non_resident'];
-const ROUTE_TYPES = ['standard', 'salary_transfer', 'non_salary_transfer', 'dab', 'full_doc', 'low_doc'];
+const SEGMENT_PATHS = ['resident', 'non_resident'];
+const ROUTE_TYPES = ['dbr', 'dab', 'both', 'manual'];
 
 interface RouteSupport {
   id: string;

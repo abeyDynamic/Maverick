@@ -12,11 +12,17 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Save, Edit2, X } from 'lucide-react';
 
-const SEGMENTS = ['resident_salaried', 'self_employed', 'non_resident'];
-const EMPLOYMENT_SUBTYPES = ['salaried', 'self_employed', 'commission', ''];
-const DOC_PATHS = ['full_doc', 'low_doc', ''];
-const ROUTE_TYPES = ['standard', 'salary_transfer', 'non_salary_transfer', 'dab', ''];
-const RULE_TYPES = ['min_salary', 'max_ltv', 'min_loan', 'max_loan', 'max_tenor', 'min_age', 'max_age', 'min_lob_months', 'restricted_nationality', 'restricted_emirate', 'dbr_limit'];
+const SEGMENTS = ['resident', 'non_resident'];
+const EMPLOYMENT_SUBTYPES = ['salaried', 'self_employed'];
+const DOC_PATHS = ['standard', 'full_doc', 'low_doc', 'na'];
+const ROUTE_TYPES = ['dbr', 'dab', 'both', 'manual'];
+const RULE_TYPES = [
+  'min_income', 'dbr_limit', 'min_loan_amount', 'max_loan_amount',
+  'max_tenor_months', 'min_lob_months', 'max_ltv',
+  'requires_manual_review', 'nationality_restriction', 'emirate_restriction',
+  'job_segment_restriction', 'industry_restriction', 'audited_fs_requirement',
+  'min_length_service_months', 'min_avg_balance_3m',
+];
 const OPERATORS = ['>=', '<=', '==', '!=', 'in', 'not_in'];
 
 interface Rule {
@@ -39,8 +45,8 @@ interface Rule {
 }
 
 const EMPTY_RULE: Omit<Rule, 'id' | 'bank_name'> = {
-  bank_id: '', segment: 'resident_salaried', employment_subtype: null, doc_path: null,
-  route_type: null, rule_type: 'min_salary', operator: '>=', value_numeric: null,
+  bank_id: '', segment: 'resident', employment_subtype: null, doc_path: null,
+  route_type: null, rule_type: 'min_income', operator: '>=', value_numeric: null,
   value_text: null, critical: true, active: true, priority: 0,
   requires_manual_review: false, source_note: null,
 };
