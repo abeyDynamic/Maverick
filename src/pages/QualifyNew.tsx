@@ -24,6 +24,9 @@ import BankEligibilityTable from '@/components/results/BankEligibilityTable';
 import WhatIfChat from '@/components/results/WhatIfChat';
 import CostBreakdownSection, { type ProductData } from '@/components/results/CostBreakdownSection';
 import DebugPanel from '@/components/qualify/DebugPanel';
+import SegmentSelector from '@/components/qualify/SegmentSelector';
+import SelfEmployedSection from '@/components/qualify/SelfEmployedSection';
+import NonResidentSection from '@/components/qualify/NonResidentSection';
 import {
   COUNTRIES, INCOME_TYPES, LIABILITY_TYPES, TRANSACTION_TYPES, PROPERTY_TYPES,
   PURPOSES, LOAN_TYPE_PREFERENCES, EMIRATES,
@@ -38,6 +41,12 @@ import {
   type CaseCoBorrower,
   type ProductRow,
   type PolicyTerm,
+  type QualSegment,
+  type SelfEmployedInfo,
+  type NonResidentInfo,
+  EMPTY_SE_INFO,
+  EMPTY_NR_INFO,
+  deriveSegment,
   toBankFromRow,
   calcTotalIncome,
   calcTotalLiabilities,
