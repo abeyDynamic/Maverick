@@ -121,6 +121,14 @@ export interface Database {
         Insert: Partial<Database['public']['Tables']['products']['Row']> & { bank_id: string };
         Update: Partial<Database['public']['Tables']['products']['Row']>;
       };
+      policy_terms: {
+        Row: {
+          id: string; bank: string; segment: string; employment_type: string;
+          attribute: string; value: string | null;
+        };
+        Insert: Partial<Database['public']['Tables']['policy_terms']['Row']> & { bank: string; attribute: string };
+        Update: Partial<Database['public']['Tables']['policy_terms']['Row']>;
+      };
       ticker_updates: {
         Row: {
           id: string; content: string; category: string;
