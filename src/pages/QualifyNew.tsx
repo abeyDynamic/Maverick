@@ -130,6 +130,11 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     loadReferenceData();
   }, []);
 
+  // Segment
+  const [segment, setSegment] = useState<QualSegment | ''>('');
+  const [seInfo, setSeInfo] = useState<SelfEmployedInfo>({ ...EMPTY_SE_INFO });
+  const [nrInfo, setNrInfo] = useState<NonResidentInfo>({ ...EMPTY_NR_INFO });
+
   // Client name
   const [clientName, setClientName] = useState('');
 
@@ -432,6 +437,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
     setSaving(true);
     try {
+      const resolvedSegment = segment || deriveSegment(residency, empType);
       const appId = await saveQualificationSnapshot({
         userId: user.id,
         editApplicantId,
@@ -441,6 +447,9 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
           nationality,
           dateOfBirth: dob,
           employmentType: empType,
+          segment: resolvedSegment,
+          selfEmployedInfo: resolvedSegment === 'self_employed' ? seInfo : undefined,
+          nonResidentInfo: resolvedSegment === 'non_resident' ? nrInfo : undefined,
         },
         property: {
           propertyValue, loanAmount, ltv, emirate, isDIFC, isAlAin,
