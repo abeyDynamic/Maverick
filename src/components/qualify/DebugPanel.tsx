@@ -266,6 +266,10 @@ export default function DebugPanel({
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1 text-[10px]">
+              <span className="text-muted-foreground font-bold">Segment:</span>
+              <span className="text-right font-bold">{segment || '(not set)'}</span>
+              <span className="text-muted-foreground">Segment Route:</span>
+              <span className="text-right font-semibold">{segmentRoute || '(auto)'}</span>
               <span className="text-muted-foreground">Employment Type:</span>
               <span className="text-right font-semibold">{employmentType || '(not set)'}</span>
               <span className="text-muted-foreground">Residency Status:</span>
