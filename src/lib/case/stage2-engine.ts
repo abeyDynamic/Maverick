@@ -160,7 +160,7 @@ export function evaluateStage2ForBanks(
       finalEligible,
       productEligible: finalEligible,
       productEligibilityReason,
-      debug: buildDebugRow(bankResult, checks, summary, finalEligible, productEligibilityReason),
+      debug: buildDebugRow(bankResult, checks, summary, finalEligible, productEligibilityReason, context.segment ?? 'resident_salaried'),
     };
 
     return acc;
