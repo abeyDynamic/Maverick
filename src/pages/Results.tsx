@@ -18,6 +18,7 @@ import {
   type CaseBank,
   type CaseIncomeField,
   type CaseLiabilityField,
+  type CaseCoBorrower,
 } from '@/lib/case';
 
 interface Applicant {
@@ -65,8 +66,9 @@ export default function Results() {
   const [loading, setLoading] = useState(true);
   const [applicant, setApplicant] = useState<Applicant | null>(null);
   const [property, setProperty] = useState<PropertyDetail | null>(null);
-  const [incomeFields, setIncomeFields] = useState<CaseIncomeField[]>([]);
-  const [liabilityFields, setLiabilityFields] = useState<CaseLiabilityField[]>([]);
+  const [mainIncomeFields, setMainIncomeFields] = useState<CaseIncomeField[]>([]);
+  const [mainLiabilityFields, setMainLiabilityFields] = useState<CaseLiabilityField[]>([]);
+  const [coBorrowers, setCoBorrowers] = useState<CaseCoBorrower[]>([]);
   const [banks, setBanks] = useState<CaseBank[]>([]);
   const [qualNotes, setQualNotes] = useState<QualNote[]>([]);
 
@@ -74,18 +76,46 @@ export default function Results() {
     if (!id) return;
     async function load() {
       setLoading(true);
-      const [appRes, propRes, incRes, liabRes, bankRes, notesRes] = await Promise.all([
+      const [appRes, propRes, incRes, liabRes, cbRes, bankRes, notesRes] = await Promise.all([
         supabase.from('applicants').select('*').eq('id', id).single(),
         supabase.from('property_details').select('*').eq('applicant_id', id).single(),
         supabase.from('income_fields').select('*').eq('applicant_id', id),
         supabase.from('liability_fields').select('*').eq('applicant_id', id),
+        supabase.from('co_borrowers').select('*').eq('applicant_id', id).order('index' as any),
         supabase.from('banks').select('*').eq('active', true),
         supabase.from('qualification_notes').select('*').eq('active', true),
       ]);
       setApplicant(appRes.data as any);
       setProperty(propRes.data as any);
-      setIncomeFields(dbIncomeToEngine(incRes.data ?? []));
-      setLiabilityFields(dbLiabilityToEngine(liabRes.data ?? []));
+
+      const incData = (incRes.data ?? []) as any[];
+      const liabData = (liabRes.data ?? []) as any[];
+
+      // Separate main applicant fields from co-borrower fields by owner_type
+      const mainInc = incData.filter((f: any) => f.owner_type === 'main' || !f.owner_type);
+      const mainLiab = liabData.filter((f: any) => f.owner_type === 'main' || !f.owner_type);
+      setMainIncomeFields(dbIncomeToEngine(mainInc));
+      setMainLiabilityFields(dbLiabilityToEngine(mainLiab));
+
+      // Build co-borrower engine objects
+      const cbData = (cbRes.data ?? []) as any[];
+      const engineCoBorrowers: CaseCoBorrower[] = cbData.map((cb: any, i: number) => {
+        const cbIncome = incData.filter((f: any) => f.owner_type === 'co_borrower' && f.co_borrower_index === i);
+        const cbLiab = liabData.filter((f: any) => f.owner_type === 'co_borrower' && f.co_borrower_index === i);
+        return {
+          name: cb.name || '',
+          relationship: cb.relationship || '',
+          employmentType: cb.employment_type || '',
+          dateOfBirth: cb.date_of_birth ? new Date(cb.date_of_birth + 'T00:00:00') : null,
+          residencyStatus: cb.residency_status || '',
+          incomeFields: dbIncomeToEngine(cbIncome),
+          liabilityFields: dbLiabilityToEngine(cbLiab),
+          selectedIncomeTypes: cbIncome.map((f: any) => f.income_type),
+          selectedLiabilityTypes: cbLiab.map((f: any) => f.liability_type),
+        };
+      });
+      setCoBorrowers(engineCoBorrowers);
+
       setBanks((bankRes.data ?? []).map(toBankFromRow));
       setQualNotes((notesRes.data ?? []) as any);
       setLoading(false);
@@ -93,8 +123,8 @@ export default function Results() {
     load();
   }, [id]);
 
-  const totalIncome = useMemo(() => calcTotalIncome(incomeFields), [incomeFields]);
-  const totalLiabilities = useMemo(() => calcTotalLiabilities(liabilityFields), [liabilityFields]);
+  const totalIncome = useMemo(() => calcTotalIncome(mainIncomeFields, coBorrowers), [mainIncomeFields, coBorrowers]);
+  const totalLiabilities = useMemo(() => calcTotalLiabilities(mainLiabilityFields, coBorrowers), [mainLiabilityFields, coBorrowers]);
 
   const loanAmount = property?.loan_amount ?? 0;
   const tenorMonths = property?.preferred_tenor_months ?? 300;
@@ -106,16 +136,9 @@ export default function Results() {
   );
 
   const whatIfAnalysis = useMemo(
-    () => buildWhatIfAnalysis(bankResults, totalIncome, totalLiabilities, liabilityFields),
-    [bankResults, totalIncome, totalLiabilities, liabilityFields]
+    () => buildWhatIfAnalysis(bankResults, totalIncome, totalLiabilities, mainLiabilityFields),
+    [bankResults, totalIncome, totalLiabilities, mainLiabilityFields]
   );
-
-  // Legacy bank format for BankEligibilityTable component
-  const legacyBanks = useMemo(() => banks.map(b => ({
-    id: b.id, bank_name: b.bankName, base_stress_rate: b.baseStressRate,
-    min_salary: b.minSalary, dbr_limit: b.dbrLimit, max_tenor_months: b.maxTenorMonths,
-    min_loan_amount: b.minLoanAmount, max_loan_amount: b.maxLoanAmount,
-  })), [banks]);
 
   if (loading) {
     return (
@@ -170,13 +193,10 @@ export default function Results() {
         <div className="flex gap-6 items-start">
           <div className="w-full lg:w-[65%]">
             <BankEligibilityTable
-              banks={legacyBanks}
+              bankResults={bankResults}
               qualNotes={qualNotes}
               totalIncome={totalIncome}
-              totalLiabilities={totalLiabilities}
               loanAmount={loanAmount}
-              tenorMonths={tenorMonths}
-              stressRate={property.stress_rate}
               employmentType={applicant.employment_type ?? ''}
               residencyStatus={applicant.residency_status ?? ''}
               nationality={applicant.nationality ?? ''}
