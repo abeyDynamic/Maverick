@@ -1,14 +1,16 @@
-import { useMemo, Fragment, useState } from 'react';
+import { useMemo, Fragment, useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CheckCircle2, XCircle, Info, ChevronDown, ChevronRight, AlertTriangle, CircleCheck } from 'lucide-react';
+import { CheckCircle2, XCircle, Info, ChevronDown, ChevronRight, AlertTriangle, CircleCheck, ShieldCheck, ShieldX } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { calculateStressEMI, formatCurrency, isLimitType, normalizeToMonthly } from '@/lib/mortgage-utils';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { runPolicyChecks, getStage2Summary, type PolicyTerm, type PolicyCheckResult } from '@/lib/policy-checks';
 import type { LiabilityEntry } from '@/components/qualify/LiabilityFieldCard';
 
 interface Bank {
@@ -156,13 +158,10 @@ function BankNoteCard({ note }: { note: QualNote }) {
       <div className="flex items-start gap-1.5">
         <NoteCategoryIcon category={category} />
         <div className="min-w-0 flex-1">
-          {/* Line 1: field name */}
           <div className="font-bold text-amber-700 dark:text-amber-400">{note.field_name}</div>
-          {/* Line 2: note text */}
           {note.note_text && (
             <p className="mt-0.5 text-foreground leading-relaxed">{note.note_text}</p>
           )}
-          {/* Line 3: official | practical */}
           {hasDetails && (
             <p className="mt-0.5 text-[10px] text-muted-foreground">
               {note.official_value && <span>Official: {note.official_value}</span>}
@@ -171,6 +170,41 @@ function BankNoteCard({ note }: { note: QualNote }) {
             </p>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Policy Check Icon ── */
+function PolicyCheckIcon({ status }: { status: PolicyCheckResult['status'] }) {
+  switch (status) {
+    case 'pass': return <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />;
+    case 'fail': return <XCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />;
+    case 'warn': return <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />;
+    case 'info': return <Info className="h-3.5 w-3.5 text-blue-500 shrink-0" />;
+    case 'no_data': return <span className="h-3.5 w-3.5 text-muted-foreground text-[10px] shrink-0">—</span>;
+  }
+}
+
+/* ── Policy Checks Grid ── */
+function PolicyChecksGrid({ checks }: { checks: PolicyCheckResult[] }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Stage 2 — Policy Checks</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5">
+        {checks.map((check, i) => (
+          <div key={i} className="flex items-center gap-1.5 text-[11px] py-0.5">
+            <PolicyCheckIcon status={check.status} />
+            <span className="font-medium text-foreground whitespace-nowrap">{check.name}:</span>
+            <span className={cn(
+              'truncate',
+              check.status === 'fail' ? 'text-red-600' :
+              check.status === 'warn' ? 'text-amber-600' :
+              check.status === 'no_data' ? 'text-muted-foreground' :
+              'text-foreground'
+            )}>{check.summary}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -263,22 +297,57 @@ interface Props {
   stressRate: number;
   employmentType?: string;
   residencyStatus?: string;
+  nationality?: string;
+  emirate?: string;
 }
 
-export default function BankEligibilityTable({ banks, qualNotes, totalIncome, totalLiabilities, loanAmount, tenorMonths, stressRate, employmentType = '', residencyStatus = '' }: Props) {
+export default function BankEligibilityTable({
+  banks, qualNotes, totalIncome, totalLiabilities, loanAmount, tenorMonths, stressRate,
+  employmentType = '', residencyStatus = '', nationality = '', emirate = ''
+}: Props) {
   const bankResults = useBankResults(banks, totalIncome, totalLiabilities, loanAmount, tenorMonths, stressRate);
   const [warningsOnly, setWarningsOnly] = useState(false);
   const [expandedBanks, setExpandedBanks] = useState<Record<string, boolean>>({});
+  const [policyTerms, setPolicyTerms] = useState<PolicyTerm[]>([]);
+
+  // Map residency/employment for policy_terms query
+  const policySegment = residencyStatus === 'non_resident' ? 'Non-Resident' : 'Resident';
+  const policyEmployment = employmentType === 'self_employed' ? 'Self Employed'
+    : residencyStatus === 'non_resident' ? 'Mixed' : 'Salaried';
+
+  // Fetch policy_terms for all banks
+  useEffect(() => {
+    if (bankResults.length === 0) return;
+    async function fetchPolicies() {
+      const bankNames = bankResults.map(r => r.bank.bank_name);
+      const { data } = await supabase
+        .from('policy_terms')
+        .select('*')
+        .in('bank', bankNames)
+        .eq('segment', policySegment)
+        .eq('employment_type', policyEmployment);
+      setPolicyTerms((data ?? []) as PolicyTerm[]);
+    }
+    fetchPolicies();
+  }, [bankResults.length, policySegment, policyEmployment]);
+
+  // Run policy checks per bank
+  const policyChecksByBank = useMemo(() => {
+    const map: Record<string, PolicyCheckResult[]> = {};
+    for (const r of bankResults) {
+      const terms = policyTerms.filter(t => t.bank === r.bank.bank_name);
+      map[r.bank.id] = runPolicyChecks(terms, totalIncome, loanAmount, nationality, emirate, employmentType, r.bank.bank_name);
+    }
+    return map;
+  }, [bankResults, policyTerms, totalIncome, loanAmount, nationality, emirate, employmentType]);
 
   const toggleBank = (bankId: string) => {
     setExpandedBanks(prev => ({ ...prev, [bankId]: !prev[bankId] }));
   };
 
-  // Split notes: bank-specific only (global notes handled externally now)
   const notesByBank = useMemo(() => {
     const byBank: Record<string, QualNote[]> = {};
     const segmentFiltered = filterNotesBySegment(qualNotes, employmentType, residencyStatus);
-
     for (const n of segmentFiltered) {
       if (n.bank_id) {
         if (!byBank[n.bank_id]) byBank[n.bank_id] = [];
@@ -288,7 +357,6 @@ export default function BankEligibilityTable({ banks, qualNotes, totalIncome, to
     return byBank;
   }, [qualNotes, employmentType, residencyStatus]);
 
-  // Count & badge color per bank
   const bankNoteMeta = useMemo(() => {
     const meta: Record<string, { count: number; hasWarning: boolean }> = {};
     for (const [bankId, notes] of Object.entries(notesByBank)) {
@@ -335,32 +403,43 @@ export default function BankEligibilityTable({ banks, qualNotes, totalIncome, to
                 <TableHead className="text-xs text-right">Stress %</TableHead>
                 <TableHead className="text-xs text-right">EMI</TableHead>
                 <TableHead className="text-xs text-right">DBR %</TableHead>
-                <TableHead className="text-xs text-center">Min Salary</TableHead>
+                <TableHead className="text-xs text-center">Stage 1</TableHead>
+                <TableHead className="text-xs text-center">Stage 2</TableHead>
                 <TableHead className="text-xs text-center">Eligible</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {bankResults.map(r => {
-                const rowBg = r.eligible
+                const checks = policyChecksByBank[r.bank.id] ?? [];
+                const stage2 = getStage2Summary(checks);
+                const fullyEligible = r.eligible && !stage2.criticalFail;
+
+                const rowBg = fullyEligible
                   ? 'bg-green-50 dark:bg-green-950/20'
-                  : 'bg-red-50 dark:bg-red-950/20';
-                const borderColor = r.eligible ? 'border-l-green-500' : 'border-l-red-500';
+                  : stage2.criticalFail && r.eligible
+                    ? 'bg-amber-50 dark:bg-amber-950/20'
+                    : 'bg-red-50 dark:bg-red-950/20';
+                const borderColor = fullyEligible ? 'border-l-green-500'
+                  : stage2.criticalFail && r.eligible ? 'border-l-amber-500'
+                  : 'border-l-red-500';
+
                 const bankNotes = notesByBank[r.bank.id] ?? [];
                 const displayNotes = warningsOnly ? bankNotes.filter(isWarningNote) : bankNotes;
                 const meta = bankNoteMeta[r.bank.id];
                 const noteCount = meta?.count ?? 0;
                 const isExpanded = expandedBanks[r.bank.id] ?? false;
+                const hasContent = checks.length > 0 || noteCount > 0;
 
                 return (
                   <Fragment key={r.bank.id}>
                     <TableRow
-                      className={cn(rowBg, noteCount > 0 && 'cursor-pointer')}
-                      onClick={() => noteCount > 0 && toggleBank(r.bank.id)}
+                      className={cn(rowBg, hasContent && 'cursor-pointer')}
+                      onClick={() => hasContent && toggleBank(r.bank.id)}
                     >
                       <TableCell className={cn('w-1 p-0 border-l-4', borderColor)} />
                       <TableCell className="font-medium text-xs py-2">
                         <div className="flex items-center gap-1.5">
-                          {noteCount > 0 && (
+                          {hasContent && (
                             isExpanded
                               ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
                               : <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
@@ -387,14 +466,63 @@ export default function BankEligibilityTable({ banks, qualNotes, totalIncome, to
                         </span>
                         <span className="text-muted-foreground text-[10px] ml-1">/ {formatDbrLimit(r.dbrLimit)}%</span>
                       </TableCell>
-                      <TableCell className="text-center py-2">
-                        {r.minSalaryMet
-                          ? <CheckCircle2 className="inline h-3.5 w-3.5 text-green-600" />
-                          : <XCircle className="inline h-3.5 w-3.5 text-red-600" />}
-                      </TableCell>
+                      {/* Stage 1 */}
                       <TableCell className="text-center py-2">
                         {r.eligible ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge className="bg-green-600 text-white text-[9px] px-1.5 py-0 hover:bg-green-700">PASS</Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs">DBR & min salary met</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge variant="destructive" className="text-[9px] px-1.5 py-0 cursor-help">FAIL</Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="max-w-xs text-xs">
+                              {getDeclineReasons(r, totalIncome).map((reason, i) => (
+                                <p key={i}>{reason}</p>
+                              ))}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                      {/* Stage 2 */}
+                      <TableCell className="text-center py-2">
+                        {checks.length > 0 ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge className={cn(
+                                'text-white text-[9px] px-1.5 py-0',
+                                stage2.criticalFail ? 'bg-red-600 hover:bg-red-700' :
+                                stage2.passed < stage2.total ? 'bg-amber-500 hover:bg-amber-600' :
+                                'bg-green-600 hover:bg-green-700'
+                              )}>
+                                {stage2.passed}/{stage2.total}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs">
+                              {stage2.criticalFail ? 'Critical policy check failed' : `${stage2.passed} of ${stage2.total} checks passed`}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      {/* Final Eligible */}
+                      <TableCell className="text-center py-2">
+                        {fullyEligible ? (
                           <Badge className="bg-green-600 text-white hover:bg-green-700 text-[10px] px-1.5 py-0">Approved</Badge>
+                        ) : r.eligible && stage2.criticalFail ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge className="bg-amber-500 text-white hover:bg-amber-600 text-[10px] px-1.5 py-0 cursor-help">Policy Fail</Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="left" className="max-w-xs text-xs">
+                              Stage 1 (DBR) passed but Stage 2 policy check failed
+                            </TooltipContent>
+                          </Tooltip>
                         ) : (
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -409,15 +537,24 @@ export default function BankEligibilityTable({ banks, qualNotes, totalIncome, to
                         )}
                       </TableCell>
                     </TableRow>
-                    {/* Bank-specific notes — collapsed by default */}
-                    {isExpanded && displayNotes.length > 0 && (
+                    {/* Expanded section: Policy checks + Notes */}
+                    {isExpanded && (
                       <TableRow className="hover:bg-transparent">
                         <TableCell className="p-0" />
-                        <TableCell colSpan={6} className="py-1.5 px-2">
-                          <div className="space-y-1">
-                            {displayNotes.map((note, i) => (
-                              <BankNoteCard key={`${r.bank.id}-${note.field_name}-${i}`} note={note} />
-                            ))}
+                        <TableCell colSpan={7} className="py-2 px-3">
+                          <div className="space-y-3">
+                            {/* Section A: Policy Checks */}
+                            {checks.length > 0 && <PolicyChecksGrid checks={checks} />}
+
+                            {/* Section B: Adviser Notes */}
+                            {displayNotes.length > 0 && (
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Adviser Notes</p>
+                                {displayNotes.map((note, i) => (
+                                  <BankNoteCard key={`${r.bank.id}-${note.field_name}-${i}`} note={note} />
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
