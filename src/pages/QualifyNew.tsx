@@ -775,8 +775,11 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
               </CardContent>
             </Card>
 
+              </>
+            )}
+
             {/* Save */}
-            <Button onClick={handleSave} disabled={saving} className="w-full bg-accent text-accent-foreground hover:bg-accent/90" size="lg">
+            <Button onClick={handleSave} disabled={saving || !segment} className="w-full bg-accent text-accent-foreground hover:bg-accent/90" size="lg">
               <Save className="mr-2 h-4 w-4" />
               {saving ? 'Saving…' : editApplicantId ? 'Save & Update' : 'Save Qualification'}
             </Button>
