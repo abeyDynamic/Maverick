@@ -36,6 +36,8 @@ import {
   type CaseIncomeField,
   type CaseLiabilityField,
   type CaseCoBorrower,
+  type ProductRow,
+  type PolicyTerm,
   toBankFromRow,
   calcTotalIncome,
   calcTotalLiabilities,
@@ -50,6 +52,8 @@ import {
   filterActiveProducts,
   matchProductsToBank,
   DEFAULT_COMPARISON_FIXED_MONTHS,
+  evaluateStage2ForBanks,
+  getStage2PolicyFilters,
   saveQualificationSnapshot,
 } from '@/lib/case';
 
@@ -100,18 +104,21 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   // Banks, notes & products from Supabase
   const [banks, setBanks] = useState<CaseBank[]>([]);
   const [qualNotes, setQualNotes] = useState<QualNote[]>([]);
-  const [productsByBank, setProductsByBank] = useState<Record<string, ProductData>>({});
+  const [productRows, setProductRows] = useState<ProductRow[]>([]);
+  const [policyTerms, setPolicyTerms] = useState<PolicyTerm[]>([]);
 
   useEffect(() => {
-    async function loadBanks() {
-      const [bankRes, notesRes] = await Promise.all([
+    async function loadReferenceData() {
+      const [bankRes, notesRes, productRes] = await Promise.all([
         supabase.from('banks').select('*').eq('active', true),
         supabase.from('qualification_notes').select('*').eq('active', true),
+        supabase.from('products').select('*') as any,
       ]);
       setBanks((bankRes.data ?? []).map(toBankFromRow));
       setQualNotes((notesRes.data ?? []) as any);
+      setProductRows(filterActiveProducts((productRes.data ?? []) as ProductRow[]));
     }
-    loadBanks();
+    loadReferenceData();
   }, []);
 
   // Client name
@@ -138,23 +145,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   const [tenorMonths, setTenorMonths] = useState(300);
   const [nominalRate, setNominalRate] = useState(4.5);
   const [stressRate, setStressRate] = useState(7.5);
-
-  // Fetch products via product engine
-  useEffect(() => {
-    async function loadProducts() {
-      const { data } = await supabase.from('products').select('*') as any;
-      const active = filterActiveProducts(data ?? []);
-      const map = matchProductsToBank(active, {
-        applicantResidency: getApplicantResidency(residency),
-        applicantSegment: getApplicantSegment(empType),
-        preferredFixedMonths: DEFAULT_COMPARISON_FIXED_MONTHS,
-        preferredTransactionType: txnType,
-        salaryTransfer,
-      });
-      setProductsByBank(map);
-    }
-    loadProducts();
-  }, [txnType, salaryTransfer, empType, residency]);
 
   // Load existing applicant data when editing
   useEffect(() => {
@@ -300,6 +290,87 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     [banks, totalIncome, totalLiabilities, loanAmount, effectiveTenor, stressRate]
   );
 
+  const { policySegment, policyEmployment } = useMemo(
+    () => getStage2PolicyFilters(residency, empType),
+    [residency, empType]
+  );
+
+  const bankNames = useMemo(
+    () => [...new Set(banks.map(bank => bank.bankName))].sort(),
+    [banks]
+  );
+
+  const bankNamesKey = useMemo(() => bankNames.join('|'), [bankNames]);
+
+  useEffect(() => {
+    if (bankNames.length === 0) {
+      setPolicyTerms([]);
+      return;
+    }
+
+    async function loadPolicyTerms() {
+      const { data } = await supabase
+        .from('policy_terms')
+        .select('*')
+        .in('bank', bankNames)
+        .eq('segment', policySegment)
+        .eq('employment_type', policyEmployment);
+
+      setPolicyTerms((data ?? []) as PolicyTerm[]);
+    }
+
+    loadPolicyTerms();
+  }, [bankNames, bankNamesKey, policyEmployment, policySegment]);
+
+  const stage2ByBank = useMemo(
+    () => evaluateStage2ForBanks(bankResults, policyTerms, {
+      totalIncome,
+      loanAmount,
+      nationality,
+      emirate,
+      employmentType: empType,
+    }),
+    [bankResults, policyTerms, totalIncome, loanAmount, nationality, emirate, empType]
+  );
+
+  const finalEligibleBankIds = useMemo(
+    () => Object.values(stage2ByBank)
+      .filter(entry => entry.productEligible)
+      .map(entry => entry.bankId),
+    [stage2ByBank]
+  );
+
+  const finalEligibleBankIdSet = useMemo(
+    () => new Set(finalEligibleBankIds),
+    [finalEligibleBankIds]
+  );
+
+  const finalEligibleBankResults = useMemo(
+    () => bankResults.filter(result => finalEligibleBankIdSet.has(result.bank.id)),
+    [bankResults, finalEligibleBankIdSet]
+  );
+
+  const productsByBank = useMemo<Record<string, ProductData>>(
+    () => matchProductsToBank(
+      productRows.filter(product => finalEligibleBankIdSet.has(product.bank_id)),
+      {
+        applicantResidency: getApplicantResidency(residency),
+        applicantSegment: getApplicantSegment(empType),
+        preferredFixedMonths: DEFAULT_COMPARISON_FIXED_MONTHS,
+        preferredTransactionType: txnType,
+        salaryTransfer,
+      }
+    ),
+    [productRows, finalEligibleBankIdSet, residency, empType, txnType, salaryTransfer]
+  );
+
+  const stage2DebugRows = useMemo(
+    () => Object.values(stage2ByBank)
+      .map(entry => entry.debug)
+      .sort((a, b) => a.bankName.localeCompare(b.bankName)),
+    [stage2ByBank]
+  );
+
   const whatIfAnalysis = useMemo(
     () => buildWhatIfAnalysis(bankResults, totalIncome, totalLiabilities, engineLiabilityFields),
     [bankResults, totalIncome, totalLiabilities, engineLiabilityFields]
@@ -372,6 +443,8 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         liabilityFields: engineLiabilityFields,
         coBorrowers: engineCoBorrowers,
         bankResults,
+        stage2ByBank,
+        finalEligibleBankIds,
         productsByBank,
         qualNotes,
         effectiveTenor,
@@ -681,6 +754,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
             {/* Bank Eligibility Table */}
             <BankEligibilityTable
               bankResults={bankResults}
+              stage2ByBank={stage2ByBank}
               qualNotes={qualNotes}
               totalIncome={totalIncome}
               loanAmount={loanAmount}
@@ -692,7 +766,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
             {/* Cost Breakdown */}
             <CostBreakdownSection
-              bankResults={bankResults}
+              bankResults={finalEligibleBankResults}
               loanAmount={loanAmount}
               propertyValue={propertyValue}
               nominalRate={nominalRate}
@@ -723,6 +797,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         residencyStatus={residency}
         nationality={nationality}
         emirate={emirate}
+        stage2DebugRows={stage2DebugRows}
       />
     </div>
   );

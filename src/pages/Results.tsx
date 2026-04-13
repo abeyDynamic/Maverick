@@ -15,10 +15,13 @@ import {
   calcTotalLiabilities,
   runStage1,
   buildWhatIfAnalysis,
+  evaluateStage2ForBanks,
+  getStage2PolicyFilters,
   type CaseBank,
   type CaseIncomeField,
   type CaseLiabilityField,
   type CaseCoBorrower,
+  type PolicyTerm,
 } from '@/lib/case';
 
 interface Applicant {
@@ -71,6 +74,7 @@ export default function Results() {
   const [coBorrowers, setCoBorrowers] = useState<CaseCoBorrower[]>([]);
   const [banks, setBanks] = useState<CaseBank[]>([]);
   const [qualNotes, setQualNotes] = useState<QualNote[]>([]);
+  const [policyTerms, setPolicyTerms] = useState<PolicyTerm[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -129,10 +133,50 @@ export default function Results() {
   const loanAmount = property?.loan_amount ?? 0;
   const tenorMonths = property?.preferred_tenor_months ?? 300;
   const ltv = property?.ltv ?? 0;
+  const { policySegment, policyEmployment } = useMemo(
+    () => getStage2PolicyFilters(applicant?.residency_status ?? '', applicant?.employment_type ?? ''),
+    [applicant?.residency_status, applicant?.employment_type]
+  );
+  const bankNames = useMemo(
+    () => [...new Set(banks.map(bank => bank.bankName))].sort(),
+    [banks]
+  );
+  const bankNamesKey = useMemo(() => bankNames.join('|'), [bankNames]);
 
   const bankResults = useMemo(
     () => runStage1(banks, totalIncome, totalLiabilities, loanAmount, tenorMonths, property?.stress_rate ?? 0),
     [banks, totalIncome, totalLiabilities, loanAmount, tenorMonths, property?.stress_rate]
+  );
+
+  useEffect(() => {
+    if (bankNames.length === 0) {
+      setPolicyTerms([]);
+      return;
+    }
+
+    async function loadPolicyTerms() {
+      const { data } = await supabase
+        .from('policy_terms')
+        .select('*')
+        .in('bank', bankNames)
+        .eq('segment', policySegment)
+        .eq('employment_type', policyEmployment);
+
+      setPolicyTerms((data ?? []) as PolicyTerm[]);
+    }
+
+    loadPolicyTerms();
+  }, [bankNames, bankNamesKey, policyEmployment, policySegment]);
+
+  const stage2ByBank = useMemo(
+    () => evaluateStage2ForBanks(bankResults, policyTerms, {
+      totalIncome,
+      loanAmount,
+      nationality: applicant?.nationality ?? '',
+      emirate: property?.emirate ?? '',
+      employmentType: applicant?.employment_type ?? '',
+    }),
+    [bankResults, policyTerms, totalIncome, loanAmount, applicant?.nationality, property?.emirate, applicant?.employment_type]
   );
 
   const whatIfAnalysis = useMemo(
@@ -194,6 +238,7 @@ export default function Results() {
           <div className="w-full lg:w-[65%]">
             <BankEligibilityTable
               bankResults={bankResults}
+              stage2ByBank={stage2ByBank}
               qualNotes={qualNotes}
               totalIncome={totalIncome}
               loanAmount={loanAmount}

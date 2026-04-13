@@ -1,4 +1,4 @@
-import { useMemo, Fragment, useState, useEffect } from 'react';
+import { useMemo, Fragment, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -9,9 +9,9 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { formatCurrency } from '@/lib/mortgage-utils';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
-import { runPolicyChecks, getStage2Summary, type PolicyTerm, type PolicyCheckResult } from '@/lib/policy-checks';
+import { type PolicyCheckResult } from '@/lib/policy-checks';
 import { formatDbrLimit, getDeclineReasons, type CaseBankResult } from '@/lib/case/stage1-engine';
+import type { Stage2BankEvaluation } from '@/lib/case';
 
 export interface QualNote {
   bank_id: string | null;
@@ -173,6 +173,7 @@ function PolicyChecksGrid({ checks }: { checks: PolicyCheckResult[] }) {
 
 interface Props {
   bankResults: CaseBankResult[];
+  stage2ByBank: Record<string, Stage2BankEvaluation>;
   qualNotes: QualNote[];
   totalIncome: number;
   loanAmount: number;
@@ -183,43 +184,11 @@ interface Props {
 }
 
 export default function BankEligibilityTable({
-  bankResults, qualNotes, totalIncome, loanAmount,
+  bankResults, stage2ByBank, qualNotes, totalIncome, loanAmount,
   employmentType = '', residencyStatus = '', nationality = '', emirate = ''
 }: Props) {
   const [warningsOnly, setWarningsOnly] = useState(false);
   const [expandedBanks, setExpandedBanks] = useState<Record<string, boolean>>({});
-  const [policyTerms, setPolicyTerms] = useState<PolicyTerm[]>([]);
-
-  // Map residency/employment for policy_terms query
-  const policySegment = residencyStatus === 'non_resident' ? 'Non-Resident' : 'Resident';
-  const policyEmployment = employmentType === 'self_employed' ? 'Self Employed'
-    : residencyStatus === 'non_resident' ? 'Mixed' : 'Salaried';
-
-  // Fetch policy_terms for all banks
-  useEffect(() => {
-    if (bankResults.length === 0) return;
-    async function fetchPolicies() {
-      const bankNames = bankResults.map(r => r.bank.bankName);
-      const { data } = await supabase
-        .from('policy_terms')
-        .select('*')
-        .in('bank', bankNames)
-        .eq('segment', policySegment)
-        .eq('employment_type', policyEmployment);
-      setPolicyTerms((data ?? []) as PolicyTerm[]);
-    }
-    fetchPolicies();
-  }, [bankResults.length, policySegment, policyEmployment]);
-
-  // Run policy checks per bank
-  const policyChecksByBank = useMemo(() => {
-    const map: Record<string, PolicyCheckResult[]> = {};
-    for (const r of bankResults) {
-      const terms = policyTerms.filter(t => t.bank === r.bank.bankName);
-      map[r.bank.id] = runPolicyChecks(terms, totalIncome, loanAmount, nationality, emirate, employmentType, r.bank.bankName);
-    }
-    return map;
-  }, [bankResults, policyTerms, totalIncome, loanAmount, nationality, emirate, employmentType]);
 
   const toggleBank = (bankId: string) => {
     setExpandedBanks(prev => ({ ...prev, [bankId]: !prev[bankId] }));
@@ -290,17 +259,24 @@ export default function BankEligibilityTable({
             </TableHeader>
             <TableBody>
               {bankResults.map(r => {
-                const checks = policyChecksByBank[r.bank.id] ?? [];
-                const stage2 = getStage2Summary(checks);
-                const fullyEligible = r.eligible && !stage2.criticalFail;
+                const stage2Evaluation = stage2ByBank[r.bank.id];
+                const checks = stage2Evaluation?.checks ?? [];
+                const stage2 = stage2Evaluation?.summary ?? {
+                  passed: 0,
+                  total: 0,
+                  criticalFail: false,
+                  criticalPass: false,
+                };
+                const fullyEligible = stage2Evaluation?.finalEligible ?? false;
+                const stage2NeedsReview = r.eligible && !stage2.criticalPass;
 
                 const rowBg = fullyEligible
                   ? 'bg-green-50 dark:bg-green-950/20'
-                  : stage2.criticalFail && r.eligible
+                  : stage2NeedsReview
                     ? 'bg-amber-50 dark:bg-amber-950/20'
                     : 'bg-red-50 dark:bg-red-950/20';
                 const borderColor = fullyEligible ? 'border-l-green-500'
-                  : stage2.criticalFail && r.eligible ? 'border-l-amber-500'
+                  : stage2NeedsReview ? 'border-l-amber-500'
                   : 'border-l-red-500';
 
                 const bankNotes = notesByBank[r.bank.id] ?? [];
@@ -376,14 +352,18 @@ export default function BankEligibilityTable({
                               <Badge className={cn(
                                 'text-white text-[9px] px-1.5 py-0',
                                 stage2.criticalFail ? 'bg-red-600 hover:bg-red-700' :
-                                stage2.passed < stage2.total ? 'bg-amber-500 hover:bg-amber-600' :
+                                !stage2.criticalPass || stage2.passed < stage2.total ? 'bg-amber-500 hover:bg-amber-600' :
                                 'bg-green-600 hover:bg-green-700'
                               )}>
                                 {stage2.passed}/{stage2.total}
                               </Badge>
                             </TooltipTrigger>
                             <TooltipContent side="bottom" className="text-xs">
-                              {stage2.criticalFail ? 'Critical policy check failed' : `${stage2.passed} of ${stage2.total} checks passed`}
+                              {stage2.criticalFail
+                                ? 'Critical policy check failed'
+                                : !stage2.criticalPass
+                                  ? 'Critical policy checks require review'
+                                  : `${stage2.passed} of ${stage2.total} validation checks passed`}
                             </TooltipContent>
                           </Tooltip>
                         ) : (
@@ -394,13 +374,15 @@ export default function BankEligibilityTable({
                       <TableCell className="text-center py-2">
                         {fullyEligible ? (
                           <Badge className="bg-green-600 text-white hover:bg-green-700 text-[10px] px-1.5 py-0">Approved</Badge>
-                        ) : r.eligible && stage2.criticalFail ? (
+                        ) : r.eligible ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Badge className="bg-amber-500 text-white hover:bg-amber-600 text-[10px] px-1.5 py-0 cursor-help">Policy Fail</Badge>
                             </TooltipTrigger>
                             <TooltipContent side="left" className="max-w-xs text-xs">
-                              Stage 1 (DBR) passed but Stage 2 policy check failed
+                              {stage2.criticalFail
+                                ? 'Stage 1 (DBR) passed but a Stage 2 critical policy check failed'
+                                : 'Stage 1 (DBR) passed but Stage 2 critical checks are not fully confirmed'}
                             </TooltipContent>
                           </Tooltip>
                         ) : (

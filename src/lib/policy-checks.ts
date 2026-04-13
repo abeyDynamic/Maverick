@@ -9,31 +9,71 @@ export interface PolicyTerm {
   value: string | null;
 }
 
+export interface PolicyCheckDebug {
+  source: 'structured' | 'policy_term';
+  attribute: string;
+  rawValue: string | null;
+  parsedNumeric: number | null;
+}
+
 export interface PolicyCheckResult {
   name: string;
   status: 'pass' | 'fail' | 'warn' | 'info' | 'no_data';
   summary: string;
   critical: boolean;
-  debug?: { attribute: string; rawValue: string | null; parsedNumeric: number | null };
+  debug?: PolicyCheckDebug;
+}
+
+export interface StructuredPolicyRules {
+  minSalary: number | null;
+  minLoanAmount: number | null;
+  maxLoanAmount: number | null;
+  dbrLimit: number | null;
+}
+
+export interface PolicyCheckInput {
+  terms: PolicyTerm[];
+  structuredRules: StructuredPolicyRules;
+  totalIncome: number;
+  loanAmount: number;
+  nationality: string;
+  emirate: string;
+  employmentType: string;
+  bankName: string;
+}
+
+export interface Stage2Summary {
+  passed: number;
+  total: number;
+  criticalFail: boolean;
+  criticalPass: boolean;
 }
 
 /**
- * Safely extract the FIRST standalone number from a policy value string.
- * Handles "12,000", "AED 15,000", "12000" but does NOT concatenate
- * multiple numbers like "12,000 for salaried / 15,000 for SE" into one giant number.
- * Returns null if no clean single number can be isolated.
+ * Safely extract a number only when the entire value is numeric with optional
+ * currency decoration. Mixed prose or multiple figures are treated as ambiguous.
  */
 function parseNumeric(val: string | null): number | null {
   if (!val) return null;
-  // Match the first number-like token: optional digits with commas, optional decimal
-  const match = val.match(/(?:^|[^0-9])(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)/);
-  if (!match) return null;
-  const cleaned = match[1].replace(/,/g, '');
-  const n = parseFloat(cleaned);
-  if (isNaN(n)) return null;
-  // Sanity: salary/loan values should be reasonable (up to 100M AED)
+  const cleaned = val
+    .trim()
+    .replace(/^aed\s*/i, '')
+    .replace(/\s*aed$/i, '')
+    .replace(/^usd\s*/i, '')
+    .replace(/\s*usd$/i, '')
+    .replace(/^\$\s*/, '')
+    .replace(/\s+/g, '');
+
+  if (!/^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$/.test(cleaned)) return null;
+
+  const n = Number(cleaned.replace(/,/g, ''));
+  if (!Number.isFinite(n)) return null;
   if (n > 100_000_000) return null;
   return n;
+}
+
+function normalizeStructuredRule(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 }
 
 function isNoneValue(val: string | null): boolean {
@@ -42,66 +82,71 @@ function isNoneValue(val: string | null): boolean {
 }
 
 /**
- * Find a policy term by exact attribute match first, then fall back to fuzzy (contains).
- * This prevents matching the wrong row when multiple attributes share a keyword.
+ * Deterministic policy lookup: exact normalized attribute match only.
  */
 function findTermExact(terms: PolicyTerm[], ...candidates: string[]): PolicyTerm | undefined {
-  // Pass 1: exact (case-insensitive)
-  for (const c of candidates) {
-    const found = terms.find(t => t.attribute.toLowerCase().trim() === c.toLowerCase());
-    if (found) return found;
-  }
-  // Pass 2: contains (but only if the keyword is a significant portion of the attribute)
-  for (const c of candidates) {
-    const found = terms.find(t => t.attribute.toLowerCase().includes(c.toLowerCase()));
-    if (found) return found;
-  }
-  return undefined;
+  const wanted = new Set(candidates.map(c => c.toLowerCase().trim().replace(/\s+/g, ' ')));
+  return terms.find(t => wanted.has(t.attribute.toLowerCase().trim().replace(/\s+/g, ' ')));
 }
 
-function debugInfo(term: PolicyTerm | undefined, parsed: number | null): PolicyCheckResult['debug'] | undefined {
+function debugInfo(term: PolicyTerm | undefined, parsed: number | null): PolicyCheckDebug | undefined {
   if (!term) return undefined;
-  return { attribute: term.attribute, rawValue: term.value, parsedNumeric: parsed };
+  return { source: 'policy_term', attribute: term.attribute, rawValue: term.value, parsedNumeric: parsed };
 }
 
-export function runPolicyChecks(
-  terms: PolicyTerm[],
-  totalIncome: number,
-  loanAmount: number,
-  nationality: string,
-  emirate: string,
-  employmentType: string,
-  bankName: string
-): PolicyCheckResult[] {
-  const checks: PolicyCheckResult[] = [];
+function structuredDebug(attribute: string, value: number | null): PolicyCheckDebug {
+  return {
+    source: 'structured',
+    attribute,
+    rawValue: value === null ? null : String(value),
+    parsedNumeric: value,
+  };
+}
 
-  // CHECK 1 — MINIMUM SALARY
-  const salaryTerm = findTermExact(terms, 'Minimum Salary', 'Min Salary');
-  const minSal = salaryTerm ? parseNumeric(salaryTerm.value) : null;
-  if (salaryTerm) {
-    if (minSal !== null) {
-      const passed = totalIncome >= minSal;
-      checks.push({
-        name: 'Min Salary',
-        status: passed ? 'pass' : 'fail',
-        summary: passed
-          ? `Min salary AED ${formatCurrency(minSal)} — client earns AED ${formatCurrency(totalIncome)} ✓`
-          : `Min salary AED ${formatCurrency(minSal)} — client earns AED ${formatCurrency(totalIncome)} ✗`,
-        critical: true,
-        debug: debugInfo(salaryTerm, minSal),
-      });
-    } else {
-      // Value exists but is not a clean number — show as info, don't fail
-      checks.push({
-        name: 'Min Salary',
-        status: 'info',
-        summary: `Policy: ${salaryTerm.value || 'See bank policy'}`,
-        critical: true,
-        debug: debugInfo(salaryTerm, null),
-      });
-    }
+function structuredRangeDebug(minLoan: number | null, maxLoan: number | null): PolicyCheckDebug {
+  return {
+    source: 'structured',
+    attribute: 'banks.min_loan_amount / banks.max_loan_amount',
+    rawValue: `min=${minLoan ?? 'n/a'}; max=${maxLoan ?? 'n/a'}`,
+    parsedNumeric: null,
+  };
+}
+
+export function runPolicyChecks({
+  terms,
+  structuredRules,
+  totalIncome,
+  loanAmount,
+  nationality,
+  emirate,
+  employmentType,
+  bankName,
+}: PolicyCheckInput): PolicyCheckResult[] {
+  const checks: PolicyCheckResult[] = [];
+  const minSalary = normalizeStructuredRule(structuredRules.minSalary);
+  const minLoan = normalizeStructuredRule(structuredRules.minLoanAmount);
+  const maxLoan = normalizeStructuredRule(structuredRules.maxLoanAmount);
+
+  // CHECK 1 — MINIMUM SALARY (structured bank rule only)
+  if (minSalary !== null) {
+    const passed = totalIncome >= minSalary;
+    checks.push({
+      name: 'Min Salary',
+      status: passed ? 'pass' : 'fail',
+      summary: passed
+        ? `Min salary AED ${formatCurrency(minSalary)} — client earns AED ${formatCurrency(totalIncome)} ✓`
+        : `Min salary AED ${formatCurrency(minSalary)} — client earns AED ${formatCurrency(totalIncome)} ✗`,
+      critical: true,
+      debug: structuredDebug('banks.min_salary', minSalary),
+    });
   } else {
-    checks.push({ name: 'Min Salary', status: 'no_data', summary: 'No policy data', critical: true });
+    checks.push({
+      name: 'Min Salary',
+      status: 'no_data',
+      summary: 'No structured bank min salary',
+      critical: true,
+      debug: structuredDebug('banks.min_salary', null),
+    });
   }
 
   // CHECK 2 — NATIONALITY
@@ -160,25 +205,44 @@ export function runPolicyChecks(
     checks.push({ name: 'Job Segment', status: 'no_data', summary: 'No policy data', critical: false });
   }
 
-  // CHECK 5 — LOAN AMOUNT
-  const minLoanTerm = findTermExact(terms, 'Minimum Loan Amount', 'Min Loan Amount');
-  const maxLoanTerm = findTermExact(terms, 'Maximum Loan Amount', 'Max Loan Amount');
-  const minLoan = minLoanTerm ? parseNumeric(minLoanTerm.value) : null;
-  const maxLoan = maxLoanTerm ? parseNumeric(maxLoanTerm.value) : null;
-
+  // CHECK 5 — LOAN AMOUNT (structured bank rule only)
   if (minLoan !== null || maxLoan !== null) {
     const belowMin = minLoan !== null && loanAmount < minLoan;
     const aboveMax = maxLoan !== null && loanAmount > maxLoan;
     if (belowMin) {
-      checks.push({ name: 'Loan Amount', status: 'fail', summary: `Loan AED ${formatCurrency(loanAmount)} below min AED ${formatCurrency(minLoan!)} ✗`, critical: true, debug: debugInfo(minLoanTerm, minLoan) });
+      checks.push({
+        name: 'Loan Amount',
+        status: 'fail',
+        summary: `Loan AED ${formatCurrency(loanAmount)} below min AED ${formatCurrency(minLoan!)} ✗`,
+        critical: true,
+        debug: structuredRangeDebug(minLoan, maxLoan),
+      });
     } else if (aboveMax) {
-      checks.push({ name: 'Loan Amount', status: 'fail', summary: `Loan AED ${formatCurrency(loanAmount)} exceeds max AED ${formatCurrency(maxLoan!)} ✗`, critical: true, debug: debugInfo(maxLoanTerm, maxLoan) });
+      checks.push({
+        name: 'Loan Amount',
+        status: 'fail',
+        summary: `Loan AED ${formatCurrency(loanAmount)} exceeds max AED ${formatCurrency(maxLoan!)} ✗`,
+        critical: true,
+        debug: structuredRangeDebug(minLoan, maxLoan),
+      });
     } else {
       const range = [minLoan ? `min AED ${formatCurrency(minLoan)}` : '', maxLoan ? `max AED ${formatCurrency(maxLoan)}` : ''].filter(Boolean).join(', ');
-      checks.push({ name: 'Loan Amount', status: 'pass', summary: `Loan AED ${formatCurrency(loanAmount)} within range (${range}) ✓`, critical: true, debug: debugInfo(minLoanTerm, minLoan) });
+      checks.push({
+        name: 'Loan Amount',
+        status: 'pass',
+        summary: `Loan AED ${formatCurrency(loanAmount)} within range (${range}) ✓`,
+        critical: true,
+        debug: structuredRangeDebug(minLoan, maxLoan),
+      });
     }
   } else {
-    checks.push({ name: 'Loan Amount', status: 'no_data', summary: 'No policy data', critical: true });
+    checks.push({
+      name: 'Loan Amount',
+      status: 'no_data',
+      summary: 'No structured bank loan rule',
+      critical: true,
+      debug: structuredRangeDebug(minLoan, maxLoan),
+    });
   }
 
   // CHECK 6 — SE ONLY: LOB
@@ -216,7 +280,7 @@ export function runPolicyChecks(
       const d = c.debug;
       console.log(
         `${c.status.toUpperCase().padEnd(7)} ${c.name.padEnd(16)} | ` +
-        (d ? `attr="${d.attribute}" raw="${d.rawValue}" parsed=${d.parsedNumeric}` : 'no match') +
+        (d ? `[${d.source}] attr="${d.attribute}" raw="${d.rawValue}" parsed=${d.parsedNumeric}` : 'no match') +
         ` → ${c.summary}`
       );
     });
@@ -226,9 +290,12 @@ export function runPolicyChecks(
   return checks;
 }
 
-export function getStage2Summary(checks: PolicyCheckResult[]): { passed: number; total: number; criticalFail: boolean } {
-  const total = checks.length;
-  const passed = checks.filter(c => c.status === 'pass' || c.status === 'info' || c.status === 'no_data').length;
+export function getStage2Summary(checks: PolicyCheckResult[]): Stage2Summary {
+  const scoredChecks = checks.filter(c => c.status !== 'info');
+  const criticalChecks = checks.filter(c => c.critical);
+  const total = scoredChecks.length;
+  const passed = scoredChecks.filter(c => c.status === 'pass').length;
   const criticalFail = checks.some(c => c.critical && c.status === 'fail');
-  return { passed, total, criticalFail };
+  const criticalPass = criticalChecks.length > 0 && criticalChecks.every(c => c.status === 'pass');
+  return { passed, total, criticalFail, criticalPass };
 }
