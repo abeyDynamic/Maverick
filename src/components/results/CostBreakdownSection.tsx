@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/mortgage-utils';
 import { cn } from '@/lib/utils';
-import type { BankResult } from './BankEligibilityTable';
+import type { CaseBankResult } from '@/lib/case/stage1-engine';
 
 export interface ProductData {
   bank_id: string;
@@ -23,7 +23,7 @@ export interface ProductData {
 }
 
 interface Props {
-  bankResults: BankResult[];
+  bankResults: CaseBankResult[];
   loanAmount: number;
   propertyValue: number;
   nominalRate: number;
@@ -33,7 +33,7 @@ interface Props {
 }
 
 interface BankCosts {
-  bank: BankResult;
+  bank: CaseBankResult;
   usedRate: number;
   displayRatePercent: number;
   rateLabel: string;
