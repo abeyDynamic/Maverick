@@ -708,6 +708,22 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
           </div>
         </div>
       </div>
+
+      {/* Developer Debug Panel — toggle with Ctrl+Shift+D */}
+      <DebugPanel
+        incomeFields={engineIncomeFields}
+        liabilityFields={engineLiabilityFields}
+        totalIncome={totalIncome}
+        totalLiabilities={totalLiabilities}
+        loanAmount={loanAmount}
+        stressRate={stressRate}
+        tenorMonths={effectiveTenor}
+        bankResults={bankResults}
+        employmentType={empType}
+        residencyStatus={residency}
+        nationality={nationality}
+        emirate={emirate}
+      />
     </div>
   );
 }
