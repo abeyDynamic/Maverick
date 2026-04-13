@@ -10,4 +10,5 @@ export * from './applicant-engine';
 export * from './stage1-engine';
 export * from './stage2-engine';
 export * from './product-engine';
+export * from './structured-rules-engine';
 export { saveQualificationSnapshot } from './snapshot-service';

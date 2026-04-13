@@ -44,6 +44,9 @@ import {
   type QualSegment,
   type SelfEmployedInfo,
   type NonResidentInfo,
+  type EligibilityRule,
+  type IncomePolicy,
+  type BankStructuredEvaluation,
   EMPTY_SE_INFO,
   EMPTY_NR_INFO,
   deriveSegment,
@@ -64,6 +67,7 @@ import {
   evaluateStage2ForBanks,
   getStage2PolicyFilters,
   saveQualificationSnapshot,
+  evaluateStructuredRulesForBank,
 } from '@/lib/case';
 
 // ── Adapters: convert UI entries to Case engine fields ──
@@ -118,14 +122,18 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   const [policyTerms, setPolicyTerms] = useState<PolicyTerm[]>([]);
   const [routeSupport, setRouteSupport] = useState<{ bank_id: string; segment_path: string; route_type: string; supported: boolean }[]>([]);
   const [routeExclusions, setRouteExclusions] = useState<Record<string, string>>({});
+  const [eligibilityRules, setEligibilityRules] = useState<EligibilityRule[]>([]);
+  const [incomePolicies, setIncomePolicies] = useState<IncomePolicy[]>([]);
 
   useEffect(() => {
     async function loadReferenceData() {
-      const [bankRes, notesRes, productRes, routeRes] = await Promise.all([
+      const [bankRes, notesRes, productRes, routeRes, rulesRes, policiesRes] = await Promise.all([
         supabase.from('banks').select('*').eq('active', true),
         supabase.from('qualification_notes').select('*').eq('active', true),
         supabase.from('products').select('*') as any,
         supabase.from('bank_route_support').select('bank_id, segment_path, route_type, supported') as any,
+        supabase.from('bank_eligibility_rules').select('*').eq('active', true) as any,
+        supabase.from('bank_income_policies').select('*').eq('active', true) as any,
       ]);
       const allBankData = (bankRes.data ?? []).map(toBankFromRow);
       setAllBanks(allBankData);
@@ -133,6 +141,8 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
       setQualNotes((notesRes.data ?? []) as any);
       setProductRows(filterActiveProducts((productRes.data ?? []) as ProductRow[]));
       setRouteSupport((routeRes.data ?? []) as any);
+      setEligibilityRules((rulesRes.data ?? []) as EligibilityRule[]);
+      setIncomePolicies((policiesRes.data ?? []) as IncomePolicy[]);
     }
     loadReferenceData();
   }, []);
@@ -389,12 +399,46 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     [bankResults, policyTerms, totalIncome, loanAmount, nationality, emirate, empType, resolvedSegment]
   );
 
-  const finalEligibleBankIds = useMemo(
-    () => Object.values(stage2ByBank)
-      .filter(entry => entry.productEligible)
-      .map(entry => entry.bankId),
-    [stage2ByBank]
-  );
+  // ── Structured rules evaluation per bank ──
+  const structuredEvalByBank = useMemo<Record<string, BankStructuredEvaluation>>(() => {
+    if (eligibilityRules.length === 0 && incomePolicies.length === 0) return {};
+    const result: Record<string, BankStructuredEvaluation> = {};
+    for (const br of bankResults) {
+      result[br.bank.id] = evaluateStructuredRulesForBank(
+        br.bank.id,
+        eligibilityRules,
+        incomePolicies,
+        qualProfile as any,
+        {
+          totalIncome,
+          loanAmount,
+          ltv,
+          tenorMonths: effectiveTenor,
+          lobMonths: seInfo.lengthOfBusinessMonths,
+          nationality,
+          emirate,
+        },
+      );
+    }
+    return result;
+  }, [bankResults, eligibilityRules, incomePolicies, qualProfile, totalIncome, loanAmount, ltv, effectiveTenor, seInfo.lengthOfBusinessMonths, nationality, emirate]);
+
+  // ── Final eligibility: combine Stage 1, Stage 2 (legacy), and structured rules ──
+  const finalEligibleBankIds = useMemo(() => {
+    return Object.values(stage2ByBank)
+      .filter(entry => {
+        // Legacy stage2 check
+        if (!entry.productEligible) return false;
+        // If structured rules exist for this bank, also require no critical fail
+        const structured = structuredEvalByBank[entry.bankId];
+        if (structured && structured.ruleResults.length > 0) {
+          if (structured.hasCriticalFail) return false;
+          if (!structured.isAutomatable) return false;
+        }
+        return true;
+      })
+      .map(entry => entry.bankId);
+  }, [stage2ByBank, structuredEvalByBank]);
 
   const finalEligibleBankIdSet = useMemo(
     () => new Set(finalEligibleBankIds),
@@ -406,18 +450,28 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     [bankResults, finalEligibleBankIdSet]
   );
 
+  // ── Product filtering: respect segment/doc/route fields on products ──
   const productsByBank = useMemo<Record<string, ProductData>>(
-    () => matchProductsToBank(
-      productRows.filter(product => finalEligibleBankIdSet.has(product.bank_id)),
-      {
+    () => {
+      const segmentFilteredProducts = productRows.filter(product => {
+        if (!finalEligibleBankIdSet.has(product.bank_id)) return false;
+        // Filter by product segment/doc/route fields if they exist
+        const p = product as any;
+        if (p.employment_subtype && p.employment_subtype !== qualProfile.employmentSubtype) return false;
+        if (p.doc_path && p.doc_path !== qualProfile.docPath) return false;
+        if (p.route_type && p.route_type !== qualProfile.routeType) return false;
+        if (p.manual_only) return false;
+        return true;
+      });
+      return matchProductsToBank(segmentFilteredProducts, {
         applicantResidency: getApplicantResidency(residency),
         applicantSegment: getApplicantSegment(empType),
         preferredFixedMonths: DEFAULT_COMPARISON_FIXED_MONTHS,
         preferredTransactionType: txnType,
         salaryTransfer,
-      }
-    ),
-    [productRows, finalEligibleBankIdSet, residency, empType, txnType, salaryTransfer]
+      });
+    },
+    [productRows, finalEligibleBankIdSet, residency, empType, txnType, salaryTransfer, qualProfile]
   );
 
   const stage2DebugRows = useMemo(
@@ -904,6 +958,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         segmentRoute={segment === 'self_employed' ? `SE/${seInfo.docType || 'unset'}` : segment === 'non_resident' ? `NR/${nrInfo.dabRequired ? 'DAB' : 'standard'}` : 'resident_salaried'}
         qualProfile={qualProfile}
         routeExclusions={routeExclusions}
+        structuredEvalByBank={structuredEvalByBank}
       />
     </div>
   );
