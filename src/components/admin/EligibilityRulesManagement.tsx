@@ -274,30 +274,30 @@ export default function EligibilityRulesManagement() {
             </div>
             <div>
               <Label className="text-xs">Employment Subtype</Label>
-              <Select value={form.employment_subtype ?? ''} onValueChange={v => setForm(p => ({ ...p, employment_subtype: v || null }))}>
+              <Select value={form.employment_subtype ?? '__none__'} onValueChange={v => setForm(p => ({ ...p, employment_subtype: v === '__none__' ? null : v }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="__none__">Any</SelectItem>
                   {EMPLOYMENT_SUBTYPES.filter(Boolean).map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div>
               <Label className="text-xs">Doc Path</Label>
-              <Select value={form.doc_path ?? ''} onValueChange={v => setForm(p => ({ ...p, doc_path: v || null }))}>
+              <Select value={form.doc_path ?? '__none__'} onValueChange={v => setForm(p => ({ ...p, doc_path: v === '__none__' ? null : v }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="__none__">Any</SelectItem>
                   {DOC_PATHS.filter(Boolean).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div>
               <Label className="text-xs">Route Type</Label>
-              <Select value={form.route_type ?? ''} onValueChange={v => setForm(p => ({ ...p, route_type: v || null }))}>
+              <Select value={form.route_type ?? '__none__'} onValueChange={v => setForm(p => ({ ...p, route_type: v === '__none__' ? null : v }))}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="__none__">Any</SelectItem>
                   {ROUTE_TYPES.filter(Boolean).map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
                 </SelectContent>
               </Select>
