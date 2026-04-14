@@ -11,25 +11,25 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 const TENORS = [
   { key: 'overnight', label: 'O/N', color: '#F97316' },
-  { key: 'one_week', label: '1W', color: '#06B6D4' },
-  { key: 'one_month', label: '1M', color: '#3B82F6' },
-  { key: 'three_months', label: '3M', color: '#22C55E' },
-  { key: 'six_months', label: '6M', color: '#A855F7' },
-  { key: 'one_year', label: '1Y', color: '#0A1F44' },
+  { key: 'w1', label: '1W', color: '#06B6D4' },
+  { key: 'm1', label: '1M', color: '#3B82F6' },
+  { key: 'm3', label: '3M', color: '#22C55E' },
+  { key: 'm6', label: '6M', color: '#A855F7' },
+  { key: 'y1', label: '1Y', color: '#0A1F44' },
 ] as const;
 
-const CHART_TENORS = TENORS.filter(t => ['one_month', 'three_months', 'six_months'].includes(t.key));
+const CHART_TENORS = TENORS.filter(t => ['m1', 'm3', 'm6'].includes(t.key));
 
 type TenorKey = typeof TENORS[number]['key'];
 
 interface HistoryRow {
   fixing_date: string;
   overnight: number | null;
-  one_week: number | null;
-  one_month: number | null;
-  three_months: number | null;
-  six_months: number | null;
-  one_year: number | null;
+  w1: number | null;
+  m1: number | null;
+  m3: number | null;
+  m6: number | null;
+  y1: number | null;
 }
 
 const fmtRate = (v: number | null) => v != null ? `${Number(v).toFixed(5)}%` : '—';
