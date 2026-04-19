@@ -25,7 +25,7 @@ import WhatIfChat from '@/components/results/WhatIfChat';
 import CostBreakdownSection, { type ProductData } from '@/components/results/CostBreakdownSection';
 import DebugPanel from '@/components/qualify/DebugPanel';
 import SegmentSelector from '@/components/qualify/SegmentSelector';
-import NotesPanel from '@/components/qualify/NotesPanel';
+import NotesPanel, { type ExtractionResult, type WhatIfContext } from '@/components/qualify/NotesPanel';
 import SelfEmployedSection from '@/components/qualify/SelfEmployedSection';
 import NonResidentSection from '@/components/qualify/NonResidentSection';
 import {
@@ -114,7 +114,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
-  const [extracting, setExtracting] = useState(false);
 
   // Banks, notes & products from Supabase
   const [banks, setBanks] = useState<CaseBank[]>([]);
@@ -526,13 +525,41 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     if (val !== 'abu_dhabi') setIsAlAin(false);
   }
 
-  // ── Notes extraction handler ──
-  async function handleExtract(notes: string) {
-    setExtracting(true);
-    try {
-      console.log('Notes received for extraction:', notes);
-    } finally {
-      setExtracting(false);
+  // ── Notes extraction handler — hydrates form state from extracted result ──
+  function handleExtract(result: ExtractionResult) {
+    if (result.client_name) setClientName(result.client_name);
+    if (result.segment) setSegment(result.segment as any);
+    if (result.residency) setResidency(result.residency);
+    if (result.nationality) setNationality(result.nationality);
+    if (result.dob) setDob(new Date(result.dob + 'T00:00:00'));
+    if (result.employment_type) setEmpType(result.employment_type);
+    if (result.emirate) setEmirate(result.emirate);
+    if (result.property_value) setPropertyValue(result.property_value);
+    if (result.loan_amount) setLoanAmount(result.loan_amount);
+    if (result.ltv) setLtv(result.ltv);
+    if (result.transaction_type) setTxnType(result.transaction_type);
+    if (result.property_type) setPropertyType(result.property_type);
+    if (result.purpose) setPurpose(result.purpose);
+    if (result.salary_transfer !== null) setSalaryTransfer(result.salary_transfer);
+    if (result.income_fields.length > 0) {
+      setSelectedIncomeTypes(result.income_fields.map(f => f.income_type));
+      setIncomeFields(result.income_fields.map(f => ({
+        income_type: f.income_type,
+        amount: f.amount,
+        percent_considered: f.percent_considered,
+        recurrence: f.recurrence as any,
+      })));
+    }
+    if (result.liability_fields.length > 0) {
+      setSelectedLiabilityTypes(result.liability_fields.map(f => f.liability_type));
+      setLiabilityFields(result.liability_fields.map(f => ({
+        liability_type: f.liability_type,
+        amount: f.amount,
+        credit_card_limit: f.credit_card_limit,
+        recurrence: f.recurrence as any,
+        closed_before_application: f.closed_before_application,
+        liability_letter_obtained: false,
+      })));
     }
   }
 
@@ -943,10 +970,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
               productsByBank={productsByBank}
             />
 
-            {/* What-If Chat */}
-            <div style={{ height: '400px' }}>
-              <WhatIfChat initialAnalysis={whatIfAnalysis || '✅ All banks are eligible — no what-if scenarios needed.'} />
-            </div>
+            {/* What-If Analysis moved to Client Notes panel → What-If tab */}
           </div>
         </div>
       </div>
@@ -975,7 +999,19 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
       <NotesPanel
         applicantId={editApplicantId}
         onExtract={handleExtract}
-        extracting={extracting}
+        whatIfContext={{
+          totalIncome,
+          totalLiabilities,
+          loanAmount,
+          stressRate,
+          tenorMonths: effectiveTenor,
+          currentDbr: bankResults.length > 0 ? bankResults[0].dbr : 0,
+          eligibleBanks: bankResults.filter(r => r.eligible).map(r => r.bank.bankName),
+          ineligibleBanks: bankResults.filter(r => !r.eligible).map(r => r.bank.bankName),
+          whatIfAnalysis: whatIfAnalysis || '',
+          bankResults,
+          liabilityFields: engineLiabilityFields,
+        }}
       />
     </div>
   );
