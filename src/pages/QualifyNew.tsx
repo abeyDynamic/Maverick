@@ -625,28 +625,30 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
       </header>
       <GlobalTickerBar />
 
-      {/* Two-column layout */}
+      {/* Three-column layout */}
       <div className="flex flex-1 min-h-0">
-        {/* LEFT PANEL — Form (40%) */}
-        <div className="w-[40%] bg-background overflow-y-auto border-r">
-          <div className="p-6 space-y-5">
-            {/* CLIENT NAME */}
-            <div>
-              <Label className="text-xs text-muted-foreground font-semibold">Client Name</Label>
-              <Input
-                className="mt-1 h-9 text-sm"
-                placeholder="Enter client name…"
-                value={clientName}
-                onChange={e => setClientName(e.target.value)}
-              />
+
+        {/* COLUMN 1 — Smart form (26%) */}
+        <div className="w-[26%] bg-background overflow-y-auto border-r flex flex-col">
+          <div className="p-4 space-y-3 flex-1">
+
+            {/* Client name + save row */}
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <Label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">Client Name</Label>
+                <Input className="mt-1 h-8 text-xs" placeholder="Enter client name…" value={clientName} onChange={e => setClientName(e.target.value)} />
+              </div>
+              <Button onClick={handleSave} disabled={saving || !segment} size="sm" className="h-8 px-3 text-xs bg-accent text-accent-foreground hover:bg-accent/90 shrink-0">
+                <Save className="h-3.5 w-3.5 mr-1" />
+                {saving ? 'Saving…' : 'Save'}
+              </Button>
             </div>
 
-            {/* SEGMENT SELECTOR */}
+            {/* Segment selector */}
             <SegmentSelector
               value={segment}
               onChange={(seg) => {
                 setSegment(seg);
-                // Auto-set residency & employment based on segment
                 if (seg === 'resident_salaried') {
                   if (!residency || residency === 'non_resident') setResidency('resident_expat');
                   setEmpType('salaried');
@@ -655,324 +657,231 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
                   setEmpType('self_employed');
                 } else if (seg === 'non_resident') {
                   setResidency('non_resident');
-                  // NR employment type is set in the NR section
                   setEmpType(nrInfo.employmentTypeNR || 'salaried');
                 }
               }}
             />
 
-            {/* Only show form after segment is selected */}
             {segment && (
-              <>
-                {/* SECTION 1 — Personal */}
-                <Card>
-                  <CardHeader className="py-3 px-4"><CardTitle className="text-sm font-semibold text-primary">1. Personal Information</CardTitle></CardHeader>
-                  <CardContent className="px-4 pb-4 space-y-3">
-                    <div className="grid gap-3 grid-cols-2">
-                      {segment !== 'non_resident' && (
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Residency Status <span className="text-destructive">*</span></Label>
-                          <Select value={residency} onValueChange={setResidency}>
-                            <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="uae_national">UAE National</SelectItem>
-                              <SelectItem value="resident_expat">Resident Expat</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Nationality <span className="text-destructive">*</span></Label>
-                        <Select value={nationality} onValueChange={setNationality}>
-                          <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
-                          <SelectContent className="max-h-60">
-                            {COUNTRIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              <div className="space-y-3">
+
+                {/* ── PERSONAL — condensed ── */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide border-b pb-1">Personal</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {segment !== 'non_resident' && (
+                      <div className="col-span-2">
+                        <Label className="text-[10px] text-muted-foreground">Residency <span className="text-destructive">*</span></Label>
+                        <Select value={residency} onValueChange={setResidency}>
+                          <SelectTrigger className="mt-0.5 h-7 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="uae_national">UAE National</SelectItem>
+                            <SelectItem value="resident_expat">Resident Expat</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Date of Birth <span className="text-destructive">*</span></Label>
-                        <Input
-                          type="date"
-                          className="mt-1 h-8 text-xs"
-                          max={format(new Date(), 'yyyy-MM-dd')}
-                          min="1940-01-01"
-                          value={dob ? format(dob, 'yyyy-MM-dd') : ''}
-                          onChange={e => {
-                            const v = e.target.value;
-                            setDob(v ? new Date(v + 'T00:00:00') : null);
-                          }}
-                        />
-                        {mainAge !== null && mainTenorElig && (
-                          <p className="mt-1 text-[10px] text-muted-foreground">
-                            Age: <strong className="text-primary">{mainAge.years}y</strong> | Max tenor: <strong className="text-primary">{mainTenorElig.salaried}m</strong> (sal) / <strong className="text-primary">{mainTenorElig.selfEmployed}m</strong> (SE)
-                          </p>
-                        )}
-                      </div>
-                      {segment === 'resident_salaried' && (
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Employment Type</Label>
-                          <Select value={empType} onValueChange={setEmpType}>
-                            <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="salaried">Salaried</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+                    )}
+                    <div className="col-span-2">
+                      <Label className="text-[10px] text-muted-foreground">Nationality <span className="text-destructive">*</span></Label>
+                      <Select value={nationality} onValueChange={setNationality}>
+                        <SelectTrigger className="mt-0.5 h-7 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent className="max-h-60">
+                          {COUNTRIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-2">
+                      <Label className="text-[10px] text-muted-foreground">Date of Birth <span className="text-destructive">*</span></Label>
+                      <Input type="date" className="mt-0.5 h-7 text-xs" max={format(new Date(), 'yyyy-MM-dd')} min="1940-01-01"
+                        value={dob ? format(dob, 'yyyy-MM-dd') : ''}
+                        onChange={e => { const v = e.target.value; setDob(v ? new Date(v + 'T00:00:00') : null); }} />
+                      {mainAge !== null && mainTenorElig && (
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">Age: <strong className="text-primary">{mainAge.years}y</strong> · Max: <strong className="text-primary">{mainTenorElig.salaried}m</strong></p>
                       )}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
 
-                {/* SEGMENT-SPECIFIC SECTIONS */}
-                {segment === 'self_employed' && (
-                  <SelfEmployedSection info={seInfo} onChange={setSeInfo} />
-                )}
-                {segment === 'non_resident' && (
-                  <NonResidentSection
-                    info={nrInfo}
-                    onChange={(info) => {
-                      setNrInfo(info);
-                      setEmpType(info.employmentTypeNR || 'salaried');
-                    }}
-                  />
-                )}
+                  {/* Segment-specific sections */}
+                  {segment === 'self_employed' && <SelfEmployedSection info={seInfo} onChange={setSeInfo} />}
+                  {segment === 'non_resident' && (
+                    <NonResidentSection info={nrInfo} onChange={(info) => { setNrInfo(info); setEmpType(info.employmentTypeNR || 'salaried'); }} />
+                  )}
+                </div>
 
-            {/* SECTION 2 — Property */}
-            <Card>
-              <CardHeader className="py-3 px-4"><CardTitle className="text-sm font-semibold text-primary">2. Property & Loan</CardTitle></CardHeader>
-              <CardContent className="px-4 pb-4 space-y-3">
-                <div className="grid gap-3 grid-cols-2">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Property Value (AED)</Label>
-                    <Input className="mt-1 h-8 text-xs" value={propertyValue ? formatCurrency(propertyValue) : ''} onChange={e => handlePropertyValueChange(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">LTV: {ltv}%</Label>
-                    <Slider className="mt-3" min={0} max={90} step={1} value={[ltv]} onValueChange={handleLtvChange} />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Loan Amount (AED)</Label>
-                    <Input className="mt-1 h-8 text-xs" value={loanAmount ? formatCurrency(loanAmount) : ''} onChange={e => handleLoanAmountChange(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Emirate</Label>
-                    <Select value={emirate} onValueChange={handleEmirateChange}>
-                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {EMIRATES.map(e => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    {emirate === 'dubai' && (
-                      <label className="flex items-center gap-1.5 mt-1.5 cursor-pointer">
-                        <Checkbox checked={isDIFC} onCheckedChange={v => setIsDIFC(!!v)} className="h-3.5 w-3.5" />
-                        <span className="text-[10px] text-muted-foreground">DIFC</span>
-                      </label>
-                    )}
-                    {emirate === 'abu_dhabi' && (
-                      <label className="flex items-center gap-1.5 mt-1.5 cursor-pointer">
-                        <Checkbox checked={isAlAin} onCheckedChange={v => setIsAlAin(!!v)} className="h-3.5 w-3.5" />
-                        <span className="text-[10px] text-muted-foreground">Al Ain</span>
-                      </label>
-                    )}
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Transaction Type</Label>
-                    <Select value={txnType} onValueChange={setTxnType}>
-                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {TRANSACTION_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Salary Transfer</Label>
-                    <Select value={salaryTransfer ? 'yes' : 'no'} onValueChange={v => setSalaryTransfer(v === 'yes')}>
-                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="yes">Yes</SelectItem>
-                        <SelectItem value="no">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Property Type</Label>
-                    <Select value={propertyType} onValueChange={setPropertyType}>
-                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
-                      <SelectContent>
-                        {PROPERTY_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Purpose</Label>
-                    <Select value={purpose} onValueChange={setPurpose}>
-                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
-                      <SelectContent>
-                        {PURPOSES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Loan Type Preference</Label>
-                    <Select value={loanTypePref} onValueChange={setLoanTypePref}>
-                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {LOAN_TYPE_PREFERENCES.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Preferred Tenor (months)</Label>
-                    <Input type="number" className="mt-1 h-8 text-xs" value={tenorMonths} onChange={e => setTenorMonths(Number(e.target.value))} max={bindingTenor} />
-                    {tenorMonths > bindingTenor && <p className="text-[10px] text-destructive mt-0.5">Exceeds binding tenor of {bindingTenor} months</p>}
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Nominal Rate %</Label>
-                    <Input type="number" step="0.01" className="mt-1 h-8 text-xs" value={nominalRate} onChange={e => setNominalRate(Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Stress Rate %</Label>
-                    <Input type="number" step="0.01" className="mt-1 h-8 text-xs" value={stressRate} onChange={e => setStressRate(Number(e.target.value))} />
+                {/* ── PROPERTY — condensed ── */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide border-b pb-1">Property & Loan</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="col-span-2">
+                      <Label className="text-[10px] text-muted-foreground">Property Value (AED)</Label>
+                      <Input className="mt-0.5 h-7 text-xs" value={propertyValue ? formatCurrency(propertyValue) : ''} onChange={e => handlePropertyValueChange(e.target.value)} />
+                    </div>
+                    <div className="col-span-2">
+                      <Label className="text-[10px] text-muted-foreground">LTV: {ltv}%</Label>
+                      <Slider className="mt-2" min={0} max={90} step={1} value={[ltv]} onValueChange={handleLtvChange} />
+                    </div>
+                    <div className="col-span-2">
+                      <Label className="text-[10px] text-muted-foreground">Loan Amount (AED)</Label>
+                      <Input className="mt-0.5 h-7 text-xs" value={loanAmount ? formatCurrency(loanAmount) : ''} onChange={e => handleLoanAmountChange(e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Emirate</Label>
+                      <Select value={emirate} onValueChange={handleEmirateChange}>
+                        <SelectTrigger className="mt-0.5 h-7 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>{EMIRATES.map(e => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}</SelectContent>
+                      </Select>
+                      {emirate === 'dubai' && <label className="flex items-center gap-1 mt-1 cursor-pointer"><Checkbox checked={isDIFC} onCheckedChange={v => setIsDIFC(!!v)} className="h-3 w-3" /><span className="text-[10px] text-muted-foreground">DIFC</span></label>}
+                      {emirate === 'abu_dhabi' && <label className="flex items-center gap-1 mt-1 cursor-pointer"><Checkbox checked={isAlAin} onCheckedChange={v => setIsAlAin(!!v)} className="h-3 w-3" /><span className="text-[10px] text-muted-foreground">Al Ain</span></label>}
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Transaction</Label>
+                      <Select value={txnType} onValueChange={setTxnType}>
+                        <SelectTrigger className="mt-0.5 h-7 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>{TRANSACTION_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Salary Transfer</Label>
+                      <Select value={salaryTransfer ? 'yes' : 'no'} onValueChange={v => setSalaryTransfer(v === 'yes')}>
+                        <SelectTrigger className="mt-0.5 h-7 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="yes">Yes</SelectItem><SelectItem value="no">No</SelectItem></SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Property Type</Label>
+                      <Select value={propertyType} onValueChange={setPropertyType}>
+                        <SelectTrigger className="mt-0.5 h-7 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent>{PROPERTY_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Purpose</Label>
+                      <Select value={purpose} onValueChange={setPurpose}>
+                        <SelectTrigger className="mt-0.5 h-7 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent>{PURPOSES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Loan Type</Label>
+                      <Select value={loanTypePref} onValueChange={setLoanTypePref}>
+                        <SelectTrigger className="mt-0.5 h-7 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>{LOAN_TYPE_PREFERENCES.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Tenor (months)</Label>
+                      <Input type="number" className="mt-0.5 h-7 text-xs" value={tenorMonths} onChange={e => setTenorMonths(Number(e.target.value))} max={bindingTenor} />
+                      {tenorMonths > bindingTenor && <p className="text-[10px] text-destructive">Exceeds {bindingTenor}m</p>}
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Nominal Rate %</Label>
+                      <Input type="number" step="0.01" className="mt-0.5 h-7 text-xs" value={nominalRate} onChange={e => setNominalRate(Number(e.target.value))} />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Stress Rate %</Label>
+                      <Input type="number" step="0.01" className="mt-0.5 h-7 text-xs" value={stressRate} onChange={e => setStressRate(Number(e.target.value))} />
+                    </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
 
-            {/* SECTION 3 — Income */}
-            <Card>
-              <CardHeader className="py-3 px-4">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-semibold text-primary">3. Income</CardTitle>
-                  <FieldSelector title="Select income fields" options={INCOME_TYPES} selected={selectedIncomeTypes} onChange={handleIncomeTypesChange} />
-                </div>
-              </CardHeader>
-              <CardContent className="px-4 pb-4">
-                {incomeFields.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-3 text-center">No income fields selected.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {incomeFields.map((f, i) => (
-                      <IncomeFieldCard key={f.income_type} entry={f}
-                        onChange={e => { const arr = [...incomeFields]; arr[i] = e; setIncomeFields(arr); }}
-                        onRemove={() => { setSelectedIncomeTypes(selectedIncomeTypes.filter(t => t !== f.income_type)); setIncomeFields(incomeFields.filter((_, j) => j !== i)); }} />
-                    ))}
+                {/* ── INCOME ── */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between border-b pb-1">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Income</p>
+                    <FieldSelector title="Select income fields" options={INCOME_TYPES} selected={selectedIncomeTypes} onChange={handleIncomeTypesChange} />
                   </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* SECTION 4 — Liabilities */}
-            <Card>
-              <CardHeader className="py-3 px-4">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-semibold text-primary">4. Liabilities</CardTitle>
-                  <FieldSelector title="Select liability fields" options={LIABILITY_TYPES} selected={selectedLiabilityTypes} onChange={handleLiabilityTypesChange} />
+                  {incomeFields.length === 0 ? (
+                    <p className="text-[10px] text-muted-foreground text-center py-2">No income fields selected.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {incomeFields.map((f, i) => (
+                        <IncomeFieldCard key={f.income_type} entry={f}
+                          onChange={e => { const arr = [...incomeFields]; arr[i] = e; setIncomeFields(arr); }}
+                          onRemove={() => { setSelectedIncomeTypes(selectedIncomeTypes.filter(t => t !== f.income_type)); setIncomeFields(incomeFields.filter((_, j) => j !== i)); }} />
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </CardHeader>
-              <CardContent className="px-4 pb-4">
-                {liabilityFields.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-3 text-center">No liability fields selected.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {liabilityFields.map((f, i) => (
-                      <LiabilityFieldCard key={f.liability_type} entry={f}
-                        onChange={e => { const arr = [...liabilityFields]; arr[i] = e; setLiabilityFields(arr); }}
-                        onRemove={() => { setSelectedLiabilityTypes(selectedLiabilityTypes.filter(t => t !== f.liability_type)); setLiabilityFields(liabilityFields.filter((_, j) => j !== i)); }} />
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
 
-            {/* SECTION 5 — Co-borrowers */}
-            <Card>
-              <CardHeader className="py-3 px-4">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-semibold text-primary">5. Co-Borrowers</CardTitle>
-                  <Button variant="outline" size="sm" className="h-7 text-xs border-accent text-accent hover:bg-accent hover:text-accent-foreground" onClick={() => setCoBorrowers([...coBorrowers, createCoBorrower()])}>
-                    <Plus className="mr-1 h-3 w-3" /> Add
-                  </Button>
+                {/* ── LIABILITIES ── */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between border-b pb-1">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Liabilities</p>
+                    <FieldSelector title="Select liability fields" options={LIABILITY_TYPES} selected={selectedLiabilityTypes} onChange={handleLiabilityTypesChange} />
+                  </div>
+                  {liabilityFields.length === 0 ? (
+                    <p className="text-[10px] text-muted-foreground text-center py-2">No liability fields selected.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {liabilityFields.map((f, i) => (
+                        <LiabilityFieldCard key={f.liability_type} entry={f}
+                          onChange={e => { const arr = [...liabilityFields]; arr[i] = e; setLiabilityFields(arr); }}
+                          onRemove={() => { setSelectedLiabilityTypes(selectedLiabilityTypes.filter(t => t !== f.liability_type)); setLiabilityFields(liabilityFields.filter((_, j) => j !== i)); }} />
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </CardHeader>
-              <CardContent className="px-4 pb-4">
-                {coBorrowers.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-3 text-center">No co-borrowers added.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {coBorrowers.map((cb, i) => (
-                      <CoBorrowerSection key={i} index={i} data={cb}
-                        onChange={d => { const arr = [...coBorrowers]; arr[i] = d; setCoBorrowers(arr); }}
-                        onRemove={() => setCoBorrowers(coBorrowers.filter((_, j) => j !== i))} />
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
 
-              </>
+                {/* ── CO-BORROWERS ── */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between border-b pb-1">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Co-Borrowers</p>
+                    <Button variant="outline" size="sm" className="h-6 text-[10px] border-accent text-accent hover:bg-accent hover:text-accent-foreground px-2" onClick={() => setCoBorrowers([...coBorrowers, createCoBorrower()])}>
+                      <Plus className="mr-1 h-3 w-3" /> Add
+                    </Button>
+                  </div>
+                  {coBorrowers.length === 0 ? (
+                    <p className="text-[10px] text-muted-foreground text-center py-2">No co-borrowers added.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {coBorrowers.map((cb, i) => (
+                        <CoBorrowerSection key={i} index={i} data={cb}
+                          onChange={d => { const arr = [...coBorrowers]; arr[i] = d; setCoBorrowers(arr); }}
+                          onRemove={() => setCoBorrowers(coBorrowers.filter((_, j) => j !== i))} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
             )}
-
-            {/* Save */}
-            <Button onClick={handleSave} disabled={saving || !segment} className="w-full bg-accent text-accent-foreground hover:bg-accent/90" size="lg">
-              <Save className="mr-2 h-4 w-4" />
-              {saving ? 'Saving…' : editApplicantId ? 'Save & Update' : 'Save Qualification'}
-            </Button>
           </div>
         </div>
 
-        {/* RIGHT PANEL — Results (60%) */}
-        <div className="w-[60%] bg-secondary overflow-y-auto">
-          <div className="p-6 space-y-4">
-            {/* Client name display */}
-            {clientName && (
-              <p className="text-sm font-semibold text-primary">{clientName}</p>
-            )}
-
-            {/* Session Reminders — global notes above DBR bar */}
-            <SessionRemindersPanel
-              notes={qualNotes.filter(n => !n.bank_id)}
-              warningsOnly={false}
-            />
-
-            {/* Pinned DBR Summary */}
+        {/* COLUMN 2 — Results (44%) */}
+        <div className="w-[44%] bg-secondary overflow-y-auto">
+          <div className="p-4 space-y-3">
+            {clientName && <p className="text-sm font-semibold text-primary">{clientName}</p>}
+            <SessionRemindersPanel notes={qualNotes.filter(n => !n.bank_id)} warningsOnly={false} />
             <div className="sticky top-0 z-10">
-              <DBRSummaryBar
-                totalIncome={totalIncome}
-                totalLiabilities={totalLiabilities}
-                loanAmount={loanAmount}
-                stressRate={stressRate}
-                tenorMonths={effectiveTenor}
-              />
+              <DBRSummaryBar totalIncome={totalIncome} totalLiabilities={totalLiabilities} loanAmount={loanAmount} stressRate={stressRate} tenorMonths={effectiveTenor} />
             </div>
-
-            {/* Bank Eligibility Table */}
-            <BankEligibilityTable
-              bankResults={bankResults}
-              stage2ByBank={stage2ByBank}
-              qualNotes={qualNotes}
-              totalIncome={totalIncome}
-              loanAmount={loanAmount}
-              employmentType={empType}
-              residencyStatus={residency}
-              nationality={nationality}
-              emirate={emirate}
-            />
-
-            {/* Cost Breakdown */}
-            <CostBreakdownSection
-              bankResults={finalEligibleBankResults}
-              loanAmount={loanAmount}
-              propertyValue={propertyValue}
-              nominalRate={nominalRate}
-              tenorMonths={effectiveTenor}
-              emirate={emirate}
-              productsByBank={productsByBank}
-            />
-
-            {/* What-If Analysis moved to Client Notes panel → What-If tab */}
+            <BankEligibilityTable bankResults={bankResults} stage2ByBank={stage2ByBank} qualNotes={qualNotes} totalIncome={totalIncome} loanAmount={loanAmount} employmentType={empType} residencyStatus={residency} nationality={nationality} emirate={emirate} />
+            <CostBreakdownSection bankResults={finalEligibleBankResults} loanAmount={loanAmount} propertyValue={propertyValue} nominalRate={nominalRate} tenorMonths={effectiveTenor} emirate={emirate} productsByBank={productsByBank} />
           </div>
         </div>
+
+        {/* COLUMN 3 — Notes + What-If (30%) */}
+        <div className="w-[30%] bg-background flex flex-col min-h-0">
+          <NotesPanel
+            embedded
+            applicantId={editApplicantId}
+            onExtract={handleExtract}
+            whatIfContext={{
+              totalIncome,
+              totalLiabilities,
+              loanAmount,
+              stressRate,
+              tenorMonths: effectiveTenor,
+              currentDbr: bankResults.length > 0 ? bankResults[0].dbr : 0,
+              eligibleBanks: bankResults.filter(r => r.eligible).map(r => r.bank.bankName),
+              ineligibleBanks: bankResults.filter(r => !r.eligible).map(r => r.bank.bankName),
+              bankResults,
+              liabilityFields: engineLiabilityFields,
+            }}
+          />
+        </div>
+
       </div>
 
       {/* Developer Debug Panel — toggle with Ctrl+Shift+D */}
@@ -996,23 +905,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         routeExclusions={routeExclusions}
         structuredEvalByBank={structuredEvalByBank}
       />
-      <NotesPanel
-        applicantId={editApplicantId}
-        onExtract={handleExtract}
-        whatIfContext={{
-          totalIncome,
-          totalLiabilities,
-          loanAmount,
-          stressRate,
-          tenorMonths: effectiveTenor,
-          currentDbr: bankResults.length > 0 ? bankResults[0].dbr : 0,
-          eligibleBanks: bankResults.filter(r => r.eligible).map(r => r.bank.bankName),
-          ineligibleBanks: bankResults.filter(r => !r.eligible).map(r => r.bank.bankName),
-          whatIfAnalysis: whatIfAnalysis || '',
-          bankResults,
-          liabilityFields: engineLiabilityFields,
-        }}
-      />
+
     </div>
   );
 }
