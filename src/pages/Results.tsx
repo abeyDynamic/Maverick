@@ -17,11 +17,17 @@ import {
   buildWhatIfAnalysis,
   evaluateStage2ForBanks,
   getStage2PolicyFilters,
+  evaluateStructuredRulesForBank,
   type CaseBank,
   type CaseIncomeField,
   type CaseLiabilityField,
   type CaseCoBorrower,
   type PolicyTerm,
+  type EligibilityRule,
+  type IncomePolicy,
+  type BankStructuredEvaluation,
+  type QualProfile,
+  deriveSegment,
 } from '@/lib/case';
 
 interface Applicant {
@@ -75,12 +81,15 @@ export default function Results() {
   const [banks, setBanks] = useState<CaseBank[]>([]);
   const [qualNotes, setQualNotes] = useState<QualNote[]>([]);
   const [policyTerms, setPolicyTerms] = useState<PolicyTerm[]>([]);
+  const [eligibilityRules, setEligibilityRules] = useState<EligibilityRule[]>([]);
+  const [incomePolicies, setIncomePolicies] = useState<IncomePolicy[]>([]);
+  const [routeSupport, setRouteSupport] = useState<{ bank_id: string; segment_path: string; route_type: string; supported: boolean }[]>([]);
 
   useEffect(() => {
     if (!id) return;
     async function load() {
       setLoading(true);
-      const [appRes, propRes, incRes, liabRes, cbRes, bankRes, notesRes] = await Promise.all([
+      const [appRes, propRes, incRes, liabRes, cbRes, bankRes, notesRes, rulesRes, policiesRes, routeRes] = await Promise.all([
         supabase.from('applicants').select('*').eq('id', id).single(),
         supabase.from('property_details').select('*').eq('applicant_id', id).single(),
         supabase.from('income_fields').select('*').eq('applicant_id', id),
@@ -88,6 +97,9 @@ export default function Results() {
         supabase.from('co_borrowers').select('*').eq('applicant_id', id).order('index' as any),
         supabase.from('banks').select('*').eq('active', true),
         supabase.from('qualification_notes').select('*').eq('active', true),
+        supabase.from('bank_eligibility_rules').select('*').eq('active', true) as any,
+        supabase.from('bank_income_policies').select('*').eq('active', true) as any,
+        supabase.from('bank_route_support').select('bank_id, segment_path, route_type, supported') as any,
       ]);
       setApplicant(appRes.data as any);
       setProperty(propRes.data as any);
@@ -122,6 +134,9 @@ export default function Results() {
 
       setBanks((bankRes.data ?? []).map(toBankFromRow));
       setQualNotes((notesRes.data ?? []) as any);
+      setEligibilityRules((rulesRes.data ?? []) as EligibilityRule[]);
+      setIncomePolicies((policiesRes.data ?? []) as IncomePolicy[]);
+      setRouteSupport((routeRes.data ?? []) as any);
       setLoading(false);
     }
     load();
@@ -183,6 +198,55 @@ export default function Results() {
     () => buildWhatIfAnalysis(bankResults, totalIncome, totalLiabilities, mainLiabilityFields),
     [bankResults, totalIncome, totalLiabilities, mainLiabilityFields]
   );
+
+  const resolvedSegment = useMemo(
+    () => deriveSegment(applicant?.residency_status ?? '', applicant?.employment_type ?? ''),
+    [applicant?.residency_status, applicant?.employment_type]
+  );
+
+  const qualProfile = useMemo((): QualProfile => ({
+    segmentPath: resolvedSegment,
+    employmentSubtype: applicant?.employment_type || 'salaried',
+    docPath: null,
+    routeType: 'salary_transfer',
+  }), [resolvedSegment, applicant?.employment_type]);
+
+  const structuredEvalByBank = useMemo<Record<string, BankStructuredEvaluation>>(() => {
+    if (eligibilityRules.length === 0 && incomePolicies.length === 0) return {};
+    const result: Record<string, BankStructuredEvaluation> = {};
+    for (const br of bankResults) {
+      result[br.bank.id] = evaluateStructuredRulesForBank(
+        br.bank.id,
+        eligibilityRules,
+        incomePolicies,
+        qualProfile as any,
+        {
+          totalIncome,
+          loanAmount,
+          ltv,
+          tenorMonths,
+          lobMonths: null,
+          nationality: applicant?.nationality ?? '',
+          emirate: property?.emirate ?? '',
+        },
+      );
+    }
+    return result;
+  }, [bankResults, eligibilityRules, incomePolicies, qualProfile, totalIncome, loanAmount, ltv, tenorMonths, applicant?.nationality, property?.emirate]);
+
+  const finalEligibleBankIds = useMemo(() => {
+    return Object.values(stage2ByBank)
+      .filter(entry => {
+        if (!entry.productEligible) return false;
+        const structured = structuredEvalByBank[entry.bankId];
+        if (structured && structured.ruleResults.length > 0) {
+          if (structured.hasCriticalFail) return false;
+          if (!structured.isAutomatable) return false;
+        }
+        return true;
+      })
+      .map(entry => entry.bankId);
+  }, [stage2ByBank, structuredEvalByBank]);
 
   if (loading) {
     return (
