@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ArrowLeft, Edit, Printer, CheckCircle2, XCircle } from 'lucide-react';
 import GlobalTickerBar from '@/components/GlobalTickerBar';
 import { formatCurrency } from '@/lib/mortgage-utils';
+import { formatDbrLimit } from '@/lib/case/stage1-engine';
 import { cn } from '@/lib/utils';
 import QualifyNew from './QualifyNew';
 
@@ -58,11 +59,6 @@ const RANK_COLORS = [
   'bg-zinc-300 text-zinc-800',
   'bg-amber-700 text-amber-50',
 ];
-
-function formatDbrLimit(val: number): string {
-  const rounded = Math.round(val * 100) / 100;
-  return rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(2);
-}
 
 export default function QualifyEdit() {
   const { id } = useParams<{ id: string }>();
