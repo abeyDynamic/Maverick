@@ -17,7 +17,7 @@ export interface ClientNote {
 }
 
 interface NotesPanelProps {
-  applicantId?: string;           // undefined on new (unsaved) qualification
+  applicantId?: string;
   onExtract: (notes: string) => Promise<void>;
   extracting: boolean;
 }
@@ -27,16 +27,11 @@ export default function NotesPanel({ applicantId, onExtract, extracting }: Notes
   const [open, setOpen] = useState(false);
   const [minimised, setMinimised] = useState(false);
   const [tab, setTab] = useState<'write' | 'history'>('write');
-
-  // Draft state — persists in memory during session
   const [draft, setDraft] = useState('');
   const [sessionLabel, setSessionLabel] = useState('');
-
-  // Saved notes history
   const [notes, setNotes] = useState<ClientNote[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Load history when panel opens and applicantId is known
   useEffect(() => {
     if (!open || !applicantId) return;
     loadHistory();
@@ -46,27 +41,23 @@ export default function NotesPanel({ applicantId, onExtract, extracting }: Notes
     if (!applicantId) return;
     setLoadingHistory(true);
     const { data, error } = await supabase
-      .from('client_notes')
+      .from('client_notes' as any)
       .select('id, note_text, created_at, session_label')
       .eq('applicant_id', applicantId)
       .order('created_at', { ascending: false });
-
     if (!error) setNotes((data ?? []) as ClientNote[]);
     setLoadingHistory(false);
   }
 
   async function saveNote(text: string): Promise<void> {
     if (!user || !applicantId || !text.trim()) return;
-    const { error } = await supabase.from('client_notes').insert({
+    const { error } = await supabase.from('client_notes' as any).insert({
       applicant_id: applicantId,
       note_text: text.trim(),
       created_by: user.id,
       session_label: sessionLabel.trim() || null,
     });
-    if (error) {
-      toast.error('Note could not be saved');
-      return;
-    }
+    if (error) { toast.error('Note could not be saved'); return; }
     toast.success('Note saved');
     setDraft('');
     setSessionLabel('');
@@ -75,17 +66,12 @@ export default function NotesPanel({ applicantId, onExtract, extracting }: Notes
 
   async function handleExtract() {
     if (!draft.trim()) return;
-    // Save note first, then extract
     await saveNote(draft);
     await onExtract(draft);
   }
 
-  async function handleSaveOnly() {
-    await saveNote(draft);
-  }
-
   async function deleteNote(id: string) {
-    await supabase.from('client_notes').delete().eq('id', id);
+    await supabase.from('client_notes' as any).delete().eq('id', id);
     setNotes(prev => prev.filter(n => n.id !== id));
     toast.success('Note deleted');
   }
@@ -112,8 +98,6 @@ export default function NotesPanel({ applicantId, onExtract, extracting }: Notes
   return (
     <div className="fixed bottom-6 right-6 z-50 w-[440px] shadow-xl">
       <Card className="border-2 border-primary/20">
-
-        {/* Header */}
         <CardHeader className="py-3 px-4 flex flex-row items-center justify-between space-y-0 border-b">
           <CardTitle className="text-sm font-semibold text-primary flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
@@ -127,9 +111,7 @@ export default function NotesPanel({ applicantId, onExtract, extracting }: Notes
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
               onClick={() => setMinimised(!minimised)}>
-              {minimised
-                ? <ChevronUp className="h-3.5 w-3.5" />
-                : <ChevronDown className="h-3.5 w-3.5" />}
+              {minimised ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </Button>
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
               onClick={() => setOpen(false)}>
@@ -140,69 +122,49 @@ export default function NotesPanel({ applicantId, onExtract, extracting }: Notes
 
         {!minimised && (
           <CardContent className="px-4 pb-4 pt-3 space-y-3">
-
-            {/* Tabs */}
             <div className="flex gap-1">
               {(['write', 'history'] as const).map(t => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
+                <button key={t} onClick={() => setTab(t)}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                    tab === t
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-secondary'
-                  }`}
-                >
+                    tab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'
+                  }`}>
                   {t === 'write' ? 'Write note' : `History (${notes.length})`}
                 </button>
               ))}
             </div>
 
-            {/* WRITE TAB */}
             {tab === 'write' && (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">
                   Type or paste notes from your client conversation. The AI will extract relevant fields into the qualification form.
                 </p>
-
-                {/* Optional session label */}
                 <input
                   className="w-full text-xs border border-input rounded-md px-3 py-1.5 bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                   placeholder="Session label (optional) — e.g. Initial call, Follow-up 1"
                   value={sessionLabel}
                   onChange={e => setSessionLabel(e.target.value)}
                 />
-
                 <Textarea
                   className="text-xs min-h-[160px] resize-none"
                   placeholder={`e.g. "Client is Indian national, works at Emirates NBD, basic salary 28k, housing allowance 8k, has a personal loan EMI 4,500/month and credit card limit 50k. Looking at a 2.2M apartment in Dubai Marina, resale, wants 80% LTV..."`}
                   value={draft}
                   onChange={e => setDraft(e.target.value)}
                 />
-
-                {/* No applicantId warning */}
                 {!applicantId && draft.trim() && (
                   <p className="text-[10px] text-amber-600">
                     Note will be saved after the qualification is first saved.
                   </p>
                 )}
-
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-xs"
+                  <Button variant="outline" size="sm" className="flex-1 text-xs"
                     disabled={!draft.trim() || !applicantId}
-                    onClick={handleSaveOnly}
-                  >
+                    onClick={() => saveNote(draft)}>
                     Save note only
                   </Button>
-                  <Button
-                    size="sm"
+                  <Button size="sm"
                     className="flex-1 gap-1.5 text-xs bg-accent text-accent-foreground hover:bg-accent/90"
                     disabled={!draft.trim() || extracting}
-                    onClick={handleExtract}
-                  >
+                    onClick={handleExtract}>
                     <Sparkles className="h-3.5 w-3.5" />
                     {extracting ? 'Extracting…' : 'Save & extract to form'}
                   </Button>
@@ -210,7 +172,6 @@ export default function NotesPanel({ applicantId, onExtract, extracting }: Notes
               </div>
             )}
 
-            {/* HISTORY TAB */}
             {tab === 'history' && (
               <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
                 {loadingHistory && (
@@ -222,8 +183,7 @@ export default function NotesPanel({ applicantId, onExtract, extracting }: Notes
                   </p>
                 )}
                 {notes.map(note => (
-                  <div key={note.id}
-                    className="border border-border rounded-lg p-3 space-y-1.5 bg-secondary/40">
+                  <div key={note.id} className="border border-border rounded-lg p-3 space-y-1.5 bg-secondary/40">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                         <Clock className="h-3 w-3" />
@@ -235,11 +195,9 @@ export default function NotesPanel({ applicantId, onExtract, extracting }: Notes
                             {note.session_label}
                           </Badge>
                         )}
-                        <Button
-                          variant="ghost" size="sm"
+                        <Button variant="ghost" size="sm"
                           className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => deleteNote(note.id)}
-                        >
+                          onClick={() => deleteNote(note.id)}>
                           <X className="h-3 w-3" />
                         </Button>
                       </div>
@@ -247,16 +205,10 @@ export default function NotesPanel({ applicantId, onExtract, extracting }: Notes
                     <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">
                       {note.note_text}
                     </p>
-                    {/* Re-extract from a historical note */}
-                    <Button
-                      variant="ghost" size="sm"
+                    <Button variant="ghost" size="sm"
                       className="h-6 text-[10px] px-2 text-accent hover:text-accent"
                       disabled={extracting}
-                      onClick={() => {
-                        setDraft(note.note_text);
-                        setTab('write');
-                      }}
-                    >
+                      onClick={() => { setDraft(note.note_text); setTab('write'); }}>
                       <Sparkles className="h-3 w-3 mr-1" />
                       Re-extract this note
                     </Button>
@@ -264,7 +216,6 @@ export default function NotesPanel({ applicantId, onExtract, extracting }: Notes
                 ))}
               </div>
             )}
-
           </CardContent>
         )}
       </Card>
