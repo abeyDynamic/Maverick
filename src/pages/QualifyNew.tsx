@@ -118,6 +118,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   // Banks, notes & products from Supabase
   const [banks, setBanks] = useState<CaseBank[]>([]);
   const [allBanks, setAllBanks] = useState<CaseBank[]>([]);
+  const [extracting, setExtracting] = useState(false);
   const [qualNotes, setQualNotes] = useState<QualNote[]>([]);
   const [productRows, setProductRows] = useState<ProductRow[]>([]);
   const [policyTerms, setPolicyTerms] = useState<PolicyTerm[]>([]);
