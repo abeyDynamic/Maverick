@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowLeft, Plus, Save } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import NotesPanel from '@/components/qualify/NotesPanel';
 import { FieldSelector } from '@/components/qualify/FieldSelector';
 import { IncomeFieldCard, IncomeEntry, createIncomeEntry } from '@/components/qualify/IncomeFieldCard';
 import { LiabilityFieldCard, LiabilityEntry, createLiabilityEntry } from '@/components/qualify/LiabilityFieldCard';
