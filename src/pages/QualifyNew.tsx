@@ -14,7 +14,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowLeft, Plus, Save } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import NotesPanel from '@/components/qualify/NotesPanel';
 import { FieldSelector } from '@/components/qualify/FieldSelector';
 import { IncomeFieldCard, IncomeEntry, createIncomeEntry } from '@/components/qualify/IncomeFieldCard';
 import { LiabilityFieldCard, LiabilityEntry, createLiabilityEntry } from '@/components/qualify/LiabilityFieldCard';
@@ -26,6 +25,7 @@ import WhatIfChat from '@/components/results/WhatIfChat';
 import CostBreakdownSection, { type ProductData } from '@/components/results/CostBreakdownSection';
 import DebugPanel from '@/components/qualify/DebugPanel';
 import SegmentSelector from '@/components/qualify/SegmentSelector';
+import NotesPanel from '@/components/qualify/NotesPanel';
 import SelfEmployedSection from '@/components/qualify/SelfEmployedSection';
 import NonResidentSection from '@/components/qualify/NonResidentSection';
 import {
@@ -114,11 +114,11 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
+  const [extracting, setExtracting] = useState(false);
 
   // Banks, notes & products from Supabase
   const [banks, setBanks] = useState<CaseBank[]>([]);
   const [allBanks, setAllBanks] = useState<CaseBank[]>([]);
-  const [extracting, setExtracting] = useState(false);
   const [qualNotes, setQualNotes] = useState<QualNote[]>([]);
   const [productRows, setProductRows] = useState<ProductRow[]>([]);
   const [policyTerms, setPolicyTerms] = useState<PolicyTerm[]>([]);
@@ -524,6 +524,16 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     setEmirate(val);
     if (val !== 'dubai') setIsDIFC(false);
     if (val !== 'abu_dhabi') setIsAlAin(false);
+  }
+
+  // ── Notes extraction handler ──
+  async function handleExtract(notes: string) {
+    setExtracting(true);
+    try {
+      console.log('Notes received for extraction:', notes);
+    } finally {
+      setExtracting(false);
+    }
   }
 
   // ── Save via snapshot service ──
@@ -961,6 +971,11 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         qualProfile={qualProfile}
         routeExclusions={routeExclusions}
         structuredEvalByBank={structuredEvalByBank}
+      />
+      <NotesPanel
+        applicantId={editApplicantId}
+        onExtract={handleExtract}
+        extracting={extracting}
       />
     </div>
   );
