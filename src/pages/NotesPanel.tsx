@@ -63,6 +63,7 @@ interface NotesPanelProps {
   applicantId?: string;
   onExtract: (result: ExtractionResult) => void;
   whatIfContext: WhatIfContext;
+  embedded?: boolean; // true = renders as a column, false = floating overlay
 }
 
 // ── Missing field definitions ──────────────────────────────────────────────
@@ -425,7 +426,7 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export default function NotesPanel({ applicantId, onExtract, whatIfContext }: NotesPanelProps) {
+export default function NotesPanel({ applicantId, onExtract, whatIfContext, embedded = false }: NotesPanelProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [minimised, setMinimised] = useState(false);
@@ -560,7 +561,8 @@ export default function NotesPanel({ applicantId, onExtract, whatIfContext }: No
     w.document.close();
   }
 
-  if (!open) {
+  // Floating mode: show collapsed button when closed
+  if (!embedded && !open) {
     return (
       <Button variant="outline" size="sm" className="fixed bottom-6 right-6 z-50 shadow-lg gap-2 bg-background" onClick={() => setOpen(true)}>
         <MessageSquare className="h-4 w-4" />
@@ -570,9 +572,17 @@ export default function NotesPanel({ applicantId, onExtract, whatIfContext }: No
     );
   }
 
+  // Embedded mode: always open, no close/minimise controls, fills column height
+  const wrapClass = embedded
+    ? 'flex flex-col h-full'
+    : 'fixed bottom-6 right-6 z-50 w-[480px] shadow-2xl max-h-[90vh] flex flex-col';
+  const cardClass = embedded
+    ? 'flex flex-col h-full rounded-none border-0 border-l'
+    : 'border-2 border-primary/20 flex flex-col min-h-0';
+
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-[480px] shadow-2xl max-h-[90vh] flex flex-col">
-      <Card className="border-2 border-primary/20 flex flex-col min-h-0">
+    <div className={wrapClass}>
+      <Card className={cardClass}>
         <CardHeader className="py-2.5 px-4 flex flex-row items-center justify-between space-y-0 border-b shrink-0">
           <CardTitle className="text-sm font-semibold text-primary flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
@@ -580,19 +590,23 @@ export default function NotesPanel({ applicantId, onExtract, whatIfContext }: No
             {extracted && <Badge className="text-[10px] h-4 px-1.5 bg-blue-100 text-blue-800">Extracted</Badge>}
           </CardTitle>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" title="Pop out" onClick={handlePopOut}>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" title="Pop out to second screen" onClick={handlePopOut}>
               <ExternalLink className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setMinimised(!minimised)}>
-              {minimised ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            </Button>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setOpen(false)}>
-              <X className="h-3.5 w-3.5" />
-            </Button>
+            {!embedded && (
+              <>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setMinimised(!minimised)}>
+                  {minimised ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setOpen(false)}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
           </div>
         </CardHeader>
 
-        {!minimised && (
+        {(!minimised || embedded) && (
           <CardContent className="px-4 pb-4 pt-3 space-y-3 overflow-y-auto">
             {/* Tabs */}
             <div className="flex gap-1 border-b pb-2 shrink-0">
