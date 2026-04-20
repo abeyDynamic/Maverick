@@ -492,7 +492,7 @@ export default function NotesPanel({ applicantId, onExtract, whatIfContext, embe
     if (!draft.trim()) return;
     setExtracting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('swift-service', { body: { mode: 'extract', payload: { notes: draft } } });
+      const { data, error } = await supabase.functions.invoke('maverick-ai', { body: { mode: 'extract', payload: { notes: draft } } });
       if (error) throw error;
       if (data?.extracted) { setExtracted(data.extracted); toast.success('AI extraction complete'); }
       else throw new Error('No data returned');
@@ -518,7 +518,7 @@ export default function NotesPanel({ applicantId, onExtract, whatIfContext, embe
     setChatMessages(prev => [...prev, { role: 'user', text: question }]);
     setChatLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('swift-service', {
+      const { data, error } = await supabase.functions.invoke('maverick-ai', {
         body: { mode: 'whatif', payload: { question, caseContext: { totalIncome: whatIfContext.totalIncome, totalLiabilities: whatIfContext.totalLiabilities, loanAmount: whatIfContext.loanAmount, stressRate: whatIfContext.stressRate, tenorMonths: whatIfContext.tenorMonths, currentDbr: whatIfContext.currentDbr, eligibleBanks: whatIfContext.eligibleBanks, ineligibleBanks: whatIfContext.ineligibleBanks, whatIfAnalysis: buildWhatIfAnalysis(whatIfContext.bankResults, whatIfContext.totalIncome, whatIfContext.totalLiabilities, whatIfContext.liabilityFields) } } },
       });
       if (error) throw error;
