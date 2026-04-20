@@ -711,7 +711,7 @@ export default function NotesPanel({ applicantId, onExtract, whatIfContext, embe
                         <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteNote(note.id)}><X className="h-3 w-3" /></Button>
                       </div>
                     </div>
-                    <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap line-clamp-4">{note.note_text}</p>
+                    <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">{note.note_text}</p>
                     <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-accent"
                       onClick={() => { setDraft(note.note_text); setTab('notes'); setExtracted(null); }}>
                       <Sparkles className="h-3 w-3 mr-1" />Re-extract
