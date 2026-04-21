@@ -62,8 +62,9 @@ export interface WhatIfContext {
 interface NotesPanelProps {
   applicantId?: string;
   onExtract: (result: ExtractionResult) => void;
+  onRequestSave?: () => Promise<string | undefined>; // returns applicantId after save
   whatIfContext: WhatIfContext;
-  embedded?: boolean; // true = renders as a column, false = floating overlay
+  embedded?: boolean;
 }
 
 // ── Missing field definitions ──────────────────────────────────────────────
@@ -426,7 +427,7 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export default function NotesPanel({ applicantId, onExtract, whatIfContext, embedded = false }: NotesPanelProps) {
+export default function NotesPanel({ applicantId, onExtract, onRequestSave, whatIfContext, embedded = false }: NotesPanelProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [minimised, setMinimised] = useState(false);
@@ -471,8 +472,17 @@ export default function NotesPanel({ applicantId, onExtract, whatIfContext, embe
   }
 
   async function saveNote(text: string) {
-    if (!user || !applicantId || !text.trim()) return;
-    const { error } = await supabase.from('client_notes' as any).insert({ applicant_id: applicantId, note_text: text.trim(), created_by: user.id, session_label: sessionLabel.trim() || null });
+    if (!user || !text.trim()) return;
+    let aid = applicantId;
+    // If no applicantId yet, request a save first to create the record
+    if (!aid && onRequestSave) {
+      aid = await onRequestSave();
+    }
+    if (!aid) {
+      toast.error('Please save the qualification first.');
+      return;
+    }
+    const { error } = await supabase.from('client_notes' as any).insert({ applicant_id: aid, note_text: text.trim(), created_by: user.id, session_label: sessionLabel.trim() || null });
     if (error) { toast.error('Note could not be saved'); return; }
     toast.success('Note saved'); setSessionLabel(''); loadHistory();
   }
@@ -630,14 +640,14 @@ export default function NotesPanel({ applicantId, onExtract, whatIfContext, embe
                     <Textarea className="text-xs min-h-[120px] resize-none"
                       placeholder={`e.g. "Indian national, salaried in UAE, salary 32k, cc limit 50k, looking at 2.5M villa Dubai, resale, 80% LTV..."`}
                       value={draft} onChange={e => setDraft(e.target.value)} />
-                    {!applicantId && draft.trim() && <p className="text-[10px] text-amber-600">Note will be saved after the qualification is first saved.</p>}
+                    
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-muted-foreground">Extract via:</span>
                       <button onClick={() => setExtractMode('rule')} className={`text-[10px] px-2 py-0.5 rounded ${extractMode === 'rule' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground border border-border'}`}>Rule-based (free)</button>
                       <button onClick={() => setExtractMode('ai')} className={`text-[10px] px-2 py-0.5 rounded flex items-center gap-1 ${extractMode === 'ai' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground border border-border'}`}><Sparkles className="h-2.5 w-2.5" />AI (smarter)</button>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="flex-1 text-xs" disabled={!draft.trim() || !applicantId} onClick={() => saveNote(draft)}>Save only</Button>
+                      <Button variant="outline" size="sm" className="flex-1 text-xs" disabled={!draft.trim()} onClick={() => saveNote(draft)}>Save only</Button>
                       <Button size="sm" className="flex-1 gap-1.5 text-xs bg-accent text-accent-foreground hover:bg-accent/90"
                         disabled={!draft.trim() || extracting}
                         onClick={extractMode === 'ai' ? handleAiExtract : handleRuleExtract}>
