@@ -46,6 +46,9 @@ interface PropertyDetail {
   preferred_tenor_months: number;
   stress_rate: number;
   nominal_rate: number;
+  transaction_type: string | null;
+  salary_transfer: boolean | null;
+  loan_type_preference: string | null;
 }
 
 function dbIncomeToEngine(rows: any[]): CaseIncomeField[] {
@@ -204,12 +207,23 @@ export default function Results() {
     [applicant?.residency_status, applicant?.employment_type]
   );
 
-  const qualProfile = useMemo((): QualProfile => ({
-    segmentPath: resolvedSegment,
-    employmentSubtype: applicant?.employment_type || 'salaried',
-    docPath: null,
-    routeType: 'salary_transfer',
-  }), [resolvedSegment, applicant?.employment_type]);
+  const qualProfile = useMemo((): QualProfile => {
+    const empType = applicant?.employment_type ?? 'salaried';
+    const residency = applicant?.residency_status ?? '';
+    // Derive routeType from saved salary_transfer preference
+    const stlPref = property?.salary_transfer;
+    const routeType = residency === 'non_resident'
+      ? 'dab'
+      : stlPref === true ? 'salary_transfer'
+      : stlPref === false ? 'non_salary_transfer'
+      : 'salary_transfer'; // default to STL if not saved
+    return {
+      segmentPath: resolvedSegment,
+      employmentSubtype: empType,
+      docPath: empType === 'self_employed' ? 'full_doc' : null, // use saved doc path when available
+      routeType,
+    };
+  }, [resolvedSegment, applicant?.employment_type, applicant?.residency_status, property?.salary_transfer]);
 
   const structuredEvalByBank = useMemo<Record<string, BankStructuredEvaluation>>(() => {
     if (eligibilityRules.length === 0 && incomePolicies.length === 0) return {};
@@ -225,7 +239,7 @@ export default function Results() {
           loanAmount,
           ltv,
           tenorMonths,
-          lobMonths: null,
+          lobMonths: null, // TODO: persist LOB to DB — use seInfo.lengthOfBusinessMonths when available
           nationality: applicant?.nationality ?? '',
           emirate: property?.emirate ?? '',
         },
