@@ -327,7 +327,16 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     [engineLiabilityFields, engineCoBorrowers]
   );
 
-  const effectiveTenor = Math.min(tenorMonths, bindingTenor);
+  // Extended tenor cap (age 70) — absolute maximum for ADIB/Mashreq
+  // bindingTenor (age 65) is advisory — adviser can override up to age 70
+  const extendedTenor = useMemo(() => {
+    if (!dob) return 300;
+    const ageMonths = getAgeFromDob(dob)?.totalMonths ?? 0;
+    return Math.min(300, Math.max(0, 70 * 12 - ageMonths - 3));
+  }, [dob]);
+  const effectiveTenor = dob
+    ? Math.min(tenorMonths, extendedTenor)   // hard cap at age 70
+    : Math.min(tenorMonths, 300);
 
   // ── Stage 1 via engine ──
   const bankResults = useMemo(
@@ -482,7 +491,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         applicantSegment: getApplicantSegment(empType),
         preferredFixedMonths: DEFAULT_COMPARISON_FIXED_MONTHS,
         preferredTransactionType: txnType,
-        salaryTransfer: salaryTransfer === 'stl' ? true : salaryTransfer === 'nstl' ? false : undefined,
+        salaryTransfer: salaryTransfer, // 'stl' | 'nstl' | 'both' — product engine handles all three
       });
     },
     [productRows, finalEligibleBankIdSet, residency, empType, txnType, salaryTransfer, qualProfile]
@@ -875,8 +884,15 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
                     </div>
                     <div>
                       <Label className="text-[10px] text-muted-foreground">Tenor (months)</Label>
-                      <Input type="number" className="mt-0.5 h-7 text-xs" value={tenorMonths} onChange={e => setTenorMonths(Number(e.target.value))} max={bindingTenor} />
-                      {tenorMonths > bindingTenor && <p className="text-[10px] text-destructive">Exceeds {bindingTenor}m</p>}
+                      <Input type="number" className="mt-0.5 h-7 text-xs" value={tenorMonths}
+                        onChange={e => setTenorMonths(Math.max(1, Number(e.target.value)))}
+                        min={12} max={300} />
+                      {dob && tenorMonths > bindingTenor && tenorMonths <= (extendedTenor ?? 300) && (
+                        <p className="text-[10px] text-amber-600">⚠ Exceeds age-65 standard ({bindingTenor}m). Supported by ADIB and Mashreq up to age 70 — other banks need employer letter.</p>
+                      )}
+                      {dob && extendedTenor !== undefined && tenorMonths > extendedTenor && (
+                        <p className="text-[10px] text-destructive">Exceeds age-70 maximum ({extendedTenor}m).</p>
+                      )}
                     </div>
                     <div>
                       <Label className="text-[10px] text-muted-foreground">Nominal Rate %</Label>
@@ -979,7 +995,15 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
               loanAmount,
               stressRate,
               tenorMonths: effectiveTenor,
-              currentDbr: bankResults.length > 0 ? bankResults[0].dbr : 0,
+              currentDbr: (() => {
+                // Use actual case DBR at stress rate — not bank[0].dbr which depends on sort order
+                const { calculateStressEMI } = require ? null : null; // imported via engine
+                if (totalIncome <= 0) return 0;
+                const emi = stressRate > 0 && effectiveTenor > 0
+                  ? (loanAmount * (stressRate/100/12) * Math.pow(1 + stressRate/100/12, effectiveTenor)) / (Math.pow(1 + stressRate/100/12, effectiveTenor) - 1)
+                  : 0;
+                return ((emi + totalLiabilities) / totalIncome) * 100;
+              })(),
               eligibleBanks: bankResults.filter(r => r.eligible).map(r => r.bank.bankName),
               ineligibleBanks: bankResults.filter(r => !r.eligible).map(r => r.bank.bankName),
               bankResults,
