@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -14,10 +14,11 @@ export default function Login() {
   const { signIn, user } = useAuth();
   const navigate = useNavigate();
 
-  if (user) {
-    navigate('/dashboard', { replace: true });
-    return null;
-  }
+  useEffect(() => {
+    if (user) navigate('/dashboard', { replace: true });
+  }, [user, navigate]);
+
+  if (user) return null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
