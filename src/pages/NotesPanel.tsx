@@ -117,93 +117,215 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     return num;
   }
 
+  // Client name — patterns like "for Ahmad", "client is John Smith", "name: Jane"
+  const namePatterns = [
+    /(?:client(?:'s)?\s+(?:name|is)|for|prepared\s+for|name\s*:)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/i,
+    /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})[\s,]/m,
+  ];
+  for (const pattern of namePatterns) {
+    const match = notes.match(pattern);
+    if (match?.[1] && match[1].length > 2) { result.client_name = match[1].trim(); break; }
+  }
+
   // Nationality
   for (const country of COUNTRIES) {
     if (text.includes(country.toLowerCase())) { result.nationality = country; result.confidence.personal += 0.4; break; }
   }
 
   // Residency / Segment
-  if (text.includes('uae national') || text.includes('emirati')) { result.residency = 'uae_national'; result.segment = 'resident_salaried'; result.confidence.personal += 0.3; }
-  else if (text.includes('non-resident') || text.includes('non resident') || text.includes('overseas')) { result.residency = 'non_resident'; result.segment = 'non_resident'; result.confidence.personal += 0.3; }
-  else if (text.includes('resident expat') || text.includes('works in uae') || text.includes('lives in dubai') || text.includes('salaried in') || text.includes('employed in uae')) { result.residency = 'resident_expat'; result.segment = 'resident_salaried'; result.confidence.personal += 0.2; }
+  if (text.includes('uae national') || text.includes('emirati')) {
+    result.residency = 'uae_national'; result.segment = 'resident_salaried'; result.confidence.personal += 0.3;
+  } else if (text.includes('non-resident') || text.includes('non resident') || text.includes('overseas') || text.includes('based abroad')) {
+    result.residency = 'non_resident'; result.segment = 'non_resident'; result.confidence.personal += 0.3;
+  } else if (text.includes('resident expat') || text.includes('works in uae') || text.includes('salaried in') || text.includes('employed in uae') || text.includes('lives in dubai') || text.includes('lives in abu dhabi')) {
+    result.residency = 'resident_expat'; result.segment = 'resident_salaried'; result.confidence.personal += 0.2;
+  }
 
-  // Employment
-  if (text.includes('self employed') || text.includes('self-employed') || text.includes('business owner')) { result.employment_type = 'self_employed'; result.segment = 'self_employed'; result.confidence.personal += 0.3; }
-  else if (text.includes('salaried') || text.includes('works at') || text.includes('employed at') || text.includes('int he uae') || text.includes('in the uae')) { result.employment_type = 'salaried'; if (!result.segment) result.segment = 'resident_salaried'; result.confidence.personal += 0.2; }
+  // Employment type
+  if (text.includes('self employed') || text.includes('self-employed') || text.includes('business owner') || text.includes('owns a company') || text.includes('owns the company')) {
+    result.employment_type = 'self_employed'; result.segment = 'self_employed'; result.confidence.personal += 0.3;
+  } else if (text.includes('salaried') || text.includes('works at') || text.includes('employed at') || text.includes('in the uae')) {
+    result.employment_type = 'salaried'; if (!result.segment) result.segment = 'resident_salaried'; result.confidence.personal += 0.2;
+  }
 
-  // Salary transfer
-  if (text.includes('salary transfer') || text.includes('stl')) result.salary_transfer = true;
-  else if (text.includes('no salary transfer') || text.includes('non-stl')) result.salary_transfer = false;
+  // DOB — patterns like "dob 15/03/1985", "born 15 march 1985", "date of birth 1985-03-15"
+  const dobPatterns = [
+    /(?:dob|date\s+of\s+birth|born(?:\s+on)?)\s*:?\s*(\d{1,2})[/-](\d{1,2})[/-](\d{4})/i,
+    /(?:dob|date\s+of\s+birth|born(?:\s+on)?)\s*:?\s*(\d{4})[/-](\d{1,2})[/-](\d{1,2})/i,
+    /(?:dob|date\s+of\s+birth)\s*:?\s*(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{4})/i,
+  ];
+  const months: Record<string, string> = { jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12' };
+  for (const p of dobPatterns) {
+    const m = notes.match(p);
+    if (m) {
+      try {
+        let dateStr = '';
+        if (m[3]?.length === 4) dateStr = `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+        else if (m[1]?.length === 4) dateStr = `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+        else if (isNaN(Number(m[2]))) dateStr = `${m[3]}-${months[m[2].toLowerCase().substring(0,3)]}-${m[1].padStart(2,'0')}`;
+        if (dateStr) { result.dob = dateStr; result.confidence.personal += 0.3; break; }
+      } catch { /* ignore */ }
+    }
+  }
+
+  // Age — "client is 45 years", "aged 45", "age 45"
+  if (!result.dob) {
+    const ageMatch = notes.match(/(?:aged?|is|\bage\b)\s+(\d{2})\s*(?:years?|yrs?|y\.o\.)?/i);
+    if (ageMatch) {
+      const age = parseInt(ageMatch[1]);
+      if (age > 18 && age < 85) {
+        const birthYear = new Date().getFullYear() - age;
+        result.dob = `${birthYear}-07-01`;
+        result.confidence.personal += 0.2;
+        result.unclear.push(`Age ${age} used — DOB approximated as ${birthYear}-07-01`);
+      }
+    }
+  }
+
+  // Salary transfer — STL/NSTL/both
+  if (text.includes('no salary transfer') || text.includes('nstl') || text.includes('non-stl') || text.includes('not transfer')) {
+    result.salary_transfer = false;
+  } else if (text.includes('salary transfer') || text.includes('\bstl\b') || text.includes('transfer salary')) {
+    result.salary_transfer = true;
+  }
 
   // Emirate
   for (const em of EMIRATES) {
     if (text.includes(em.label.toLowerCase())) { result.emirate = em.value; result.confidence.property += 0.2; break; }
   }
 
-  // Property value — catches "prop for 2.5m", "property 2.5m", "2.5m property"
-  const propMatch = notes.match(/(?:property|apartment|villa|flat|prop)\s+(?:value|worth|for|at|priced)?\s*(?:aed\s*)?([\d.,]+[km]?)/i)
-    || notes.match(/([\d.,]+[km]?)\s*(?:aed)?\s*(?:property|apartment|villa|flat|prop)/i)
-    || notes.match(/(?:buy|purchase|buying|looking at)\s+a?\s*(?:property|prop|apartment|villa|flat)?\s+(?:for|at|worth)?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
+  // Property value
+  const propMatch = notes.match(/(?:property|apartment|villa|flat|prop|unit)\s+(?:value|worth|for|at|priced|is)?\s*(?:aed\s*)?([\d.,]+[km]?)/i)
+    || notes.match(/([\d.,]+[km]?)\s*(?:aed)?\s*(?:property|apartment|villa|flat)/i)
+    || notes.match(/(?:buy|purchase|buying|looking\s+at)\s+a?\s*(?:property|prop|apartment|villa|flat)?\s+(?:for|at|worth)?\s*(?:aed\s*)?([\d.,]+[km]?)/i)
+    || notes.match(/(?:priced?\s+at|asking\s+price|listed\s+at)\s*(?:aed\s*)?([\d.,]+[km]?)/i);
   if (propMatch) { const val = parseAmount(propMatch[propMatch.length - 1]); if (val && val > 100000) { result.property_value = val; result.confidence.property += 0.4; } }
 
   // LTV
-  const ltvMatch = notes.match(/(\d{2,3})\s*%?\s*ltv/i) || notes.match(/ltv\s*(?:of|:)?\s*(\d{2,3})/i);
-  if (ltvMatch) { result.ltv = parseInt(ltvMatch[1]); result.confidence.property += 0.3; }
+  const ltvMatch = notes.match(/(\d{2,3})\s*%?\s*ltv/i) || notes.match(/ltv\s*(?:of|:)?\s*(\d{2,3})/i) || notes.match(/(\d{2})%\s*(?:down|deposit)/i);
+  if (ltvMatch) {
+    const v = parseInt(ltvMatch[1]);
+    result.ltv = text.includes('down') || text.includes('deposit') ? 100 - v : v;
+    result.confidence.property += 0.3;
+  }
 
   // Loan amount
   const loanMatch = notes.match(/loan\s*(?:amount|of|:)?\s*(?:aed\s*)?([\d.,]+[km]?)/i)
-    || notes.match(/(?:finance|mortgage)\s+(?:of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i);
+    || notes.match(/(?:finance|mortgage|borrow)\s+(?:of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i);
   if (loanMatch) { const val = parseAmount(loanMatch[loanMatch.length - 1]); if (val && val > 50000) { result.loan_amount = val; result.confidence.property += 0.3; } }
 
-  // Calculate missing values
+  // Calculate missing property values
   if (result.property_value && result.ltv && !result.loan_amount) result.loan_amount = Math.round(result.property_value * result.ltv / 100);
   if (result.property_value && result.loan_amount && !result.ltv) result.ltv = Math.round((result.loan_amount / result.property_value) * 100);
 
   // Transaction type
-  if (text.includes('resale')) result.transaction_type = 'resale';
+  if (text.includes('resale') || text.includes('secondary market')) result.transaction_type = 'resale';
   else if (text.includes('off-plan') || text.includes('off plan')) result.transaction_type = 'off_plan';
   else if (text.includes('handover')) result.transaction_type = 'handover';
-  else if (text.includes('buyout')) result.transaction_type = 'buyout';
-  else if (text.includes('equity release')) result.transaction_type = 'equity';
+  else if (text.includes('buyout') || text.includes('buy out') || text.includes('re-mortgage') || text.includes('remortgage')) result.transaction_type = 'buyout';
+  else if (text.includes('equity release') || text.includes('equity')) result.transaction_type = 'equity';
 
   // Property type
-  if (text.includes('apartment') || text.includes('flat')) result.property_type = 'Apartment';
+  if (text.includes('apartment') || text.includes('flat') || text.includes('studio')) result.property_type = 'Apartment';
+  else if (text.includes('townhouse') || text.includes('town house')) result.property_type = 'Townhouse';
   else if (text.includes('villa')) result.property_type = 'Villa';
-  else if (text.includes('townhouse')) result.property_type = 'Townhouse';
+  else if (text.includes('office')) result.property_type = 'Office Space';
+  else if (text.includes('warehouse')) result.property_type = 'Warehouse';
 
   // Purpose
-  if (text.includes('investment') || text.includes('to rent')) result.purpose = 'Investment';
-  else if (text.includes('self use') || text.includes('own use')) result.purpose = 'Self Use';
-  else if (text.includes('first home') || text.includes('first time')) result.purpose = 'First Home';
+  if (text.includes('investment') || text.includes('to rent') || text.includes('buy to let')) result.purpose = 'Investment';
+  else if (text.includes('self use') || text.includes('own use') || text.includes('to live')) result.purpose = 'Self Use';
+  else if (text.includes('first home') || text.includes('first time buyer') || text.includes('first property')) result.purpose = 'First Home';
   else if (text.includes('second home')) result.purpose = 'Second Home';
 
-  // Income
+  // ── INCOME ──
+
+  // Salaried income
   const incomeMap = [
-    { type: 'Basic Salary', pattern: /basic\s+salary\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i },
-    { type: 'Basic Salary', pattern: /salary\s+(?:is\s+|of\s+|aed\s+)?([\d.,]+[km]?)/i },
-    { type: 'Basic Salary', pattern: /earns?\s+(?:aed\s*)?([\d.,]+[km]?)/i },
-    { type: 'Housing Allowance', pattern: /housing\s+allowance\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i },
-    { type: 'Transport Allowance', pattern: /transport\s+allowance\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i },
-    { type: 'Bonus Fixed', pattern: /(?:fixed\s+)?bonus\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i },
-    { type: 'Commission Variable', pattern: /commission\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i },
-    { type: 'Rental Income 1', pattern: /rental\s+income\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i },
+    { type: 'Basic Salary', patterns: [
+      /basic\s+salary\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i,
+      /salary\s+(?:is\s+|of\s+|aed\s+)?([\d.,]+[km]?)/i,
+      /earns?\s+(?:aed\s*)?([\d.,]+[km]?)/i,
+      /income\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i,
+    ]},
+    { type: 'Housing Allowance', patterns: [/housing\s+allowance\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
+    { type: 'Transport Allowance', patterns: [/transport\s+(?:allowance\s+)?(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
+    { type: 'Educational Allowance', patterns: [/(?:education(?:al)?|school)\s+allowance\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
+    { type: 'Bonus Fixed', patterns: [/(?:fixed\s+)?bonus\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
+    { type: 'Bonus Variable', patterns: [/(?:variable|performance)\s+bonus\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
+    { type: 'Commission Variable', patterns: [/commission\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
+    { type: 'Rental Income 1', patterns: [/rental\s+income\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i, /rent\s+(?:received|income|of)\s+(?:aed\s*)?([\d.,]+[km]?)/i] },
+    // SE income types
+    { type: 'SE Audited Revenue', patterns: [/(?:audited\s+)?revenue\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i, /turnover\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
+    { type: 'SE Personal DAB', patterns: [/(?:personal\s+)?(?:dab|daily\s+average\s+balance)\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
+    { type: 'SE Personal MCTO', patterns: [/(?:personal\s+)?(?:mcto|monthly\s+credit\s+turnover)\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
+    { type: 'SE Company DAB', patterns: [/company\s+(?:dab|daily\s+average\s+balance)\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
+    { type: 'SE Company MCTO', patterns: [/company\s+(?:mcto|monthly\s+credit\s+turnover)\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
   ];
   const addedTypes = new Set<string>();
-  for (const { type, pattern } of incomeMap) {
+  for (const { type, patterns } of incomeMap) {
     if (addedTypes.has(type)) continue;
-    const m = notes.match(pattern);
-    if (m) { const val = parseAmount(m[m.length - 1]); if (val && val > 0) { result.income_fields.push({ income_type: type, amount: val, percent_considered: 100, recurrence: 'monthly' }); result.confidence.income = Math.min(result.confidence.income + 0.3, 1); addedTypes.add(type); } }
+    for (const pattern of patterns) {
+      const m = notes.match(pattern);
+      if (m) {
+        const val = parseAmount(m[m.length - 1]);
+        if (val && val > 0) {
+          result.income_fields.push({ income_type: type, amount: val, percent_considered: 100, recurrence: 'monthly' });
+          result.confidence.income = Math.min(result.confidence.income + 0.3, 1);
+          addedTypes.add(type);
+          break;
+        }
+      }
+    }
   }
 
-  // Liabilities — catches "pl", "al", "cc limit", "cc 50000"
-  const plMatch = notes.match(/(?:personal\s+loan|\bpl\b)\s+(?:emi|instalment)?\s+(?:of\s+|is\s+)?(?:aed\s*)?([\d.,]+[km]?)/i);
-  if (plMatch) { const val = parseAmount(plMatch[plMatch.length - 1]); if (val) { result.liability_fields.push({ liability_type: 'Personal Loan 1 EMI', amount: val, credit_card_limit: 0, recurrence: 'monthly', closed_before_application: false }); result.confidence.liabilities = Math.min(result.confidence.liabilities + 0.4, 1); } }
+  // ── LIABILITIES ──
+  // Personal loan — also captures PL bank "personal loan at ENBD 5500"
+  const plPatterns = [
+    /(?:personal\s+loan|\bpl\b)\s+(?:at\s+\w+\s+)?(?:emi|instalment|of|is)?\s*(?:aed\s*)?([\d.,]+[km]?)/i,
+    /(?:pl|personal\s+loan)\s+(?:aed\s*)?([\d.,]+[km]?)\s*(?:\/mo(?:nth)?)?/i,
+  ];
+  for (const p of plPatterns) {
+    const m = notes.match(p);
+    if (m) {
+      const val = parseAmount(m[m.length - 1]);
+      if (val && val > 0 && val < 200000) {
+        result.liability_fields.push({ liability_type: 'Personal Loan 1 EMI', amount: val, credit_card_limit: 0, recurrence: 'monthly', closed_before_application: false });
+        result.confidence.liabilities = Math.min(result.confidence.liabilities + 0.4, 1);
+        break;
+      }
+    }
+  }
 
-  const carMatch = notes.match(/(?:car\s+loan|auto\s+loan|\bal\b)\s+(?:emi|instalment)?\s+(?:of\s+|is\s+)?(?:aed\s*)?([\d.,]+[km]?)/i);
-  if (carMatch) { const val = parseAmount(carMatch[carMatch.length - 1]); if (val) { result.liability_fields.push({ liability_type: 'Auto Loan 1 EMI', amount: val, credit_card_limit: 0, recurrence: 'monthly', closed_before_application: false }); result.confidence.liabilities = Math.min(result.confidence.liabilities + 0.3, 1); } }
+  // Auto/car loan
+  const carMatch = notes.match(/(?:car\s+loan|auto\s+loan|\bal\b|vehicle\s+loan)\s+(?:emi|of|is)?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
+  if (carMatch) {
+    const val = parseAmount(carMatch[carMatch.length - 1]);
+    if (val && val < 100000) {
+      result.liability_fields.push({ liability_type: 'Auto Loan 1 EMI', amount: val, credit_card_limit: 0, recurrence: 'monthly', closed_before_application: false });
+      result.confidence.liabilities = Math.min(result.confidence.liabilities + 0.3, 1);
+    }
+  }
 
-  const ccMatches = [...notes.matchAll(/(?:credit\s+card|\bcc\b)\s+(?:limit\s+)?(?:of\s+|is\s+)?(?:aed\s*)?([\d.,]+[km]?)/gi)];
-  ccMatches.slice(0, 3).forEach((m, i) => { const val = parseAmount(m[1]); if (val) { result.liability_fields.push({ liability_type: `Credit Card ${i + 1} Limit`, amount: 0, credit_card_limit: val, recurrence: 'monthly', closed_before_application: false }); result.confidence.liabilities = Math.min(result.confidence.liabilities + 0.3, 1); } });
+  // Credit cards
+  const ccMatches = [...notes.matchAll(/(?:credit\s+card|\bcc\b)\s*(?:\d)?\s*(?:limit\s+)?(?:of\s+|is\s+)?(?:aed\s*)?([\d.,]+[km]?)/gi)];
+  ccMatches.slice(0, 3).forEach((m, i) => {
+    const val = parseAmount(m[1]);
+    if (val) {
+      result.liability_fields.push({ liability_type: `Credit Card ${i + 1} Limit`, amount: 0, credit_card_limit: val, recurrence: 'monthly', closed_before_application: false });
+      result.confidence.liabilities = Math.min(result.confidence.liabilities + 0.3, 1);
+    }
+  });
+
+  // Home loan / existing mortgage
+  const homeLoanMatch = notes.match(/(?:existing\s+mortgage|home\s+loan|existing\s+loan)\s+(?:emi|of|is)?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
+  if (homeLoanMatch) {
+    const val = parseAmount(homeLoanMatch[homeLoanMatch.length - 1]);
+    if (val) {
+      result.liability_fields.push({ liability_type: 'Home Loan Existing EMI 1', amount: val, credit_card_limit: 0, recurrence: 'monthly', closed_before_application: false });
+      result.confidence.liabilities = Math.min(result.confidence.liabilities + 0.3, 1);
+    }
+  }
 
   result.confidence.personal = Math.min(result.confidence.personal, 1);
   result.confidence.property = Math.min(result.confidence.property, 1);
