@@ -639,7 +639,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
           fullName: clientName || 'New Client',
           residencyStatus: residency || 'resident_expat',
           nationality: nationality || '',
-          dateOfBirth: dob,
+          dateOfBirth: dob || null,
           employmentType: empType,
           segment: resolvedSegment,
         },
