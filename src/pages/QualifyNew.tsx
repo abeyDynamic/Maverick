@@ -32,7 +32,7 @@ import NonResidentSection from '@/components/qualify/NonResidentSection';
 import {
   COUNTRIES, INCOME_TYPES, LIABILITY_TYPES, TRANSACTION_TYPES, PROPERTY_TYPES,
   PURPOSES, LOAN_TYPE_PREFERENCES, EMIRATES,
-  formatCurrency,
+  formatCurrency, calculateStressEMI,
 } from '@/lib/mortgage-utils';
 
 // ── Engine imports ──
@@ -995,15 +995,9 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
               loanAmount,
               stressRate,
               tenorMonths: effectiveTenor,
-              currentDbr: (() => {
-                // Use actual case DBR at stress rate — not bank[0].dbr which depends on sort order
-                const { calculateStressEMI } = require ? null : null; // imported via engine
-                if (totalIncome <= 0) return 0;
-                const emi = stressRate > 0 && effectiveTenor > 0
-                  ? (loanAmount * (stressRate/100/12) * Math.pow(1 + stressRate/100/12, effectiveTenor)) / (Math.pow(1 + stressRate/100/12, effectiveTenor) - 1)
-                  : 0;
-                return ((emi + totalLiabilities) / totalIncome) * 100;
-              })(),
+              currentDbr: totalIncome > 0
+                ? ((calculateStressEMI(loanAmount, stressRate, effectiveTenor) + totalLiabilities) / totalIncome) * 100
+                : 0,
               eligibleBanks: bankResults.filter(r => r.eligible).map(r => r.bank.bankName),
               ineligibleBanks: bankResults.filter(r => !r.eligible).map(r => r.bank.bankName),
               bankResults,
