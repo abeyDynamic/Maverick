@@ -557,6 +557,7 @@ export default function NotesPanel({ applicantId, onExtract, onRequestSave, what
   const [draft, setDraft] = useState('');
   const [sessionLabel, setSessionLabel] = useState('');
   const [savedNotes, setSavedNotes] = useState<ClientNote[]>([]);
+  const [resolvedId, setResolvedId] = useState<string | undefined>(undefined);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extracted, setExtracted] = useState<ExtractionResult | null>(null);
@@ -567,7 +568,8 @@ export default function NotesPanel({ applicantId, onExtract, onRequestSave, what
   const chatEndRef = useRef<HTMLDivElement>(null);
   const popoutRef = useRef<Window | null>(null);
 
-  useEffect(() => { if (open && applicantId) loadHistory(); }, [open, applicantId]);
+  useEffect(() => { if (applicantId) setResolvedId(applicantId); }, [applicantId]);
+  useEffect(() => { if (open && (resolvedId || applicantId)) loadHistory(); }, [open, resolvedId, applicantId]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
 
   useEffect(() => {
@@ -586,27 +588,40 @@ export default function NotesPanel({ applicantId, onExtract, onRequestSave, what
   }, []);
 
   async function loadHistory() {
-    if (!applicantId) return;
+    const aid = resolvedId || applicantId;
+    if (!aid) return;
     setLoadingHistory(true);
-    const { data } = await supabase.from('client_notes' as any).select('id, note_text, created_at, session_label').eq('applicant_id', applicantId).order('created_at', { ascending: false });
+    const { data } = await supabase.from('client_notes' as any).select('id, note_text, created_at, session_label').eq('applicant_id', aid).order('created_at', { ascending: false });
     setSavedNotes((data ?? []) as ClientNote[]);
     setLoadingHistory(false);
   }
 
   async function saveNote(text: string) {
     if (!user || !text.trim()) return;
-    let aid = applicantId;
-    // If no applicantId yet, request a save first to create the record
+    let aid = resolvedId || applicantId;
     if (!aid && onRequestSave) {
       aid = await onRequestSave();
+      if (aid) setResolvedId(aid); // persist so subsequent saves reuse same record
     }
     if (!aid) {
       toast.error('Please save the qualification first.');
       return;
     }
-    const { error } = await supabase.from('client_notes' as any).insert({ applicant_id: aid, note_text: text.trim(), created_by: user.id, session_label: sessionLabel.trim() || null });
+    const { error } = await supabase.from('client_notes' as any).insert({
+      applicant_id: aid,
+      note_text: text.trim(),
+      created_by: user.id,
+      session_label: sessionLabel.trim() || null
+    });
     if (error) { toast.error('Note could not be saved'); return; }
-    toast.success('Note saved'); setSessionLabel(''); loadHistory();
+    toast.success('Note saved');
+    setSessionLabel('');
+    // Explicitly reload with the resolved id — applicantId prop may still be undefined
+    const { data } = await supabase.from('client_notes' as any)
+      .select('id, note_text, created_at, session_label')
+      .eq('applicant_id', aid)
+      .order('created_at', { ascending: false });
+    setSavedNotes((data ?? []) as ClientNote[]);
   }
 
   async function deleteNote(id: string) {
