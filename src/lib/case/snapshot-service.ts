@@ -191,7 +191,7 @@ export async function saveQualificationSnapshot(params: SaveParams): Promise<str
     cost_comparison: savedCostComparison,
   } as any);
 
-  await supabase.from('property_details').insert({
+  const { error: propInsertError } = await supabase.from('property_details').insert({
     applicant_id: appId,
     property_value: property.propertyValue || null,
     loan_amount: property.loanAmount || null,
@@ -200,6 +200,9 @@ export async function saveQualificationSnapshot(params: SaveParams): Promise<str
     is_difc: property.isDIFC,
     is_al_ain: property.isAlAin,
     transaction_type: property.transactionType,
+    salary_transfer: typeof property.salaryTransfer === 'string'
+      ? property.salaryTransfer === 'stl'
+      : property.salaryTransfer ?? null,
     property_type: property.propertyType || null,
     purpose: property.purpose || null,
     loan_type_preference: property.loanTypePreference,
@@ -207,9 +210,10 @@ export async function saveQualificationSnapshot(params: SaveParams): Promise<str
     nominal_rate: property.nominalRate,
     stress_rate: property.stressRate,
   });
+  if (propInsertError) console.error('Property insert error:', propInsertError);
 
   if (incomeFields.length > 0) {
-    await supabase.from('income_fields').insert(
+    const { error: incError } = await supabase.from('income_fields').insert(
       incomeFields.map(f => ({
         applicant_id: appId,
         income_type: f.incomeType,
@@ -219,10 +223,11 @@ export async function saveQualificationSnapshot(params: SaveParams): Promise<str
         owner_type: 'main',
       }))
     );
+    if (incError) console.error('Income insert error:', incError);
   }
 
   if (liabilityFields.length > 0) {
-    await supabase.from('liability_fields').insert(
+    const { error: liabError } = await supabase.from('liability_fields').insert(
       liabilityFields.map(f => ({
         applicant_id: appId,
         liability_type: f.liabilityType,
@@ -234,6 +239,7 @@ export async function saveQualificationSnapshot(params: SaveParams): Promise<str
         owner_type: 'main',
       }))
     );
+    if (liabError) console.error('Liability insert error:', liabError);
   }
 
   for (let i = 0; i < coBorrowers.length; i++) {
