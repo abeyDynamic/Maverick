@@ -27,6 +27,7 @@ import DebugPanel from '@/components/qualify/DebugPanel';
 import SegmentSelector from '@/components/qualify/SegmentSelector';
 import NotesPanel, { type ExtractionResult, type WhatIfContext } from '@/components/qualify/NotesPanel';
 import SelfEmployedSection from '@/components/qualify/SelfEmployedSection';
+import QualificationReadinessCard from '@/components/qualify/QualificationReadinessCard';
 import NonResidentSection from '@/components/qualify/NonResidentSection';
 import {
   COUNTRIES, INCOME_TYPES, LIABILITY_TYPES, TRANSACTION_TYPES, PROPERTY_TYPES,
@@ -160,6 +161,8 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   const [residency, setResidency] = useState('');
   const [nationality, setNationality] = useState('');
   const [dob, setDob] = useState<Date | null>(null);
+  const [dobInputMode, setDobInputMode] = useState<'dob' | 'age'>('dob');
+  const [ageInput, setAgeInput] = useState<string>('');
   const [empType, setEmpType] = useState('');
 
   // Section 2 — Property
@@ -170,7 +173,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   const [isDIFC, setIsDIFC] = useState(false);
   const [isAlAin, setIsAlAin] = useState(false);
   const [txnType, setTxnType] = useState('resale');
-  const [salaryTransfer, setSalaryTransfer] = useState(true);
+  const [salaryTransfer, setSalaryTransfer] = useState<'stl' | 'nstl' | 'both'>('both');
   const [propertyType, setPropertyType] = useState('');
   const [purpose, setPurpose] = useState('');
   const [loanTypePref, setLoanTypePref] = useState('best');
@@ -291,6 +294,16 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
   // ── Derived values via engines ──
   const mainAge = useMemo(() => getAgeFromDob(dob), [dob]);
+
+  function applyAgeInput(ageStr: string) {
+    setAgeInput(ageStr);
+    const age = parseInt(ageStr);
+    if (!isNaN(age) && age > 18 && age < 90) {
+      // Approximate DOB from age — use July 1 of birth year as midpoint
+      const birthYear = new Date().getFullYear() - age;
+      setDob(new Date(birthYear, 6, 1)); // July 1
+    }
+  }
   const mainTenorElig = useMemo(() => mainAge !== null ? getTenorEligibility(mainAge.totalMonths) : null, [mainAge]);
 
   const { bindingTenor, bindingName } = useMemo(
@@ -362,7 +375,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     const employmentSubtype = empType || 'salaried';
     const docPath = resolvedSegment === 'self_employed' ? (seInfo.docType || 'full_doc') : null;
     const routeType = resolvedSegment === 'non_resident' && nrInfo.dabRequired ? 'dab'
-      : salaryTransfer ? 'salary_transfer' : 'non_salary_transfer';
+      : salaryTransfer === 'stl' ? 'salary_transfer' : salaryTransfer === 'nstl' ? 'non_salary_transfer' : 'salary_transfer';
     return { segmentPath, employmentSubtype, docPath, routeType };
   }, [resolvedSegment, empType, seInfo.docType, nrInfo.dabRequired, salaryTransfer]);
 
@@ -469,7 +482,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         applicantSegment: getApplicantSegment(empType),
         preferredFixedMonths: DEFAULT_COMPARISON_FIXED_MONTHS,
         preferredTransactionType: txnType,
-        salaryTransfer,
+        salaryTransfer: salaryTransfer === 'stl' ? true : salaryTransfer === 'nstl' ? false : undefined,
       });
     },
     [productRows, finalEligibleBankIdSet, residency, empType, txnType, salaryTransfer, qualProfile]
@@ -540,7 +553,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     if (result.transaction_type) setTxnType(result.transaction_type);
     if (result.property_type) setPropertyType(result.property_type);
     if (result.purpose) setPurpose(result.purpose);
-    if (result.salary_transfer !== null) setSalaryTransfer(result.salary_transfer);
+    if (result.salary_transfer !== null) setSalaryTransfer(result.salary_transfer ? 'stl' : 'nstl');
     if (result.income_fields.length > 0) {
       setSelectedIncomeTypes(result.income_fields.map(f => f.income_type));
       setIncomeFields(result.income_fields.map(f => ({
@@ -568,7 +581,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     if (!user) return;
     if (!residency) { toast.error('Residency Status is required'); return; }
     if (!nationality) { toast.error('Nationality is required'); return; }
-    if (!dob) { toast.error('Date of Birth is required'); return; }
+    // DOB optional — tenor uses default 300m if not provided
 
     setSaving(true);
     try {
@@ -588,7 +601,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         },
         property: {
           propertyValue, loanAmount, ltv, emirate, isDIFC, isAlAin,
-          transactionType: txnType, salaryTransfer, propertyType, purpose,
+          transactionType: txnType, salaryTransfer: salaryTransfer === 'stl', propertyType, purpose,
           loanTypePreference: loanTypePref, preferredTenorMonths: tenorMonths,
           nominalRate, stressRate,
         },
@@ -632,7 +645,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         },
         property: {
           propertyValue, loanAmount, ltv, emirate, isDIFC, isAlAin,
-          transactionType: txnType, salaryTransfer, propertyType, purpose,
+          transactionType: txnType, salaryTransfer: salaryTransfer === 'stl', propertyType, purpose,
           loanTypePreference: loanTypePref, preferredTenorMonths: tenorMonths,
           nominalRate, stressRate,
         },
@@ -733,18 +746,64 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
                       </Select>
                     </div>
                     <div className="col-span-2">
-                      <Label className="text-[10px] text-muted-foreground">Date of Birth <span className="text-destructive">*</span></Label>
-                      <Input type="date" className="mt-0.5 h-7 text-xs" max={format(new Date(), 'yyyy-MM-dd')} min="1940-01-01"
-                        value={dob ? format(dob, 'yyyy-MM-dd') : ''}
-                        onChange={e => { const v = e.target.value; setDob(v ? new Date(v + 'T00:00:00') : null); }} />
+                      <div className="flex items-center justify-between mb-0.5">
+                        <Label className="text-[10px] text-muted-foreground">Date of Birth / Age</Label>
+                        <div className="flex gap-0 bg-muted rounded overflow-hidden">
+                          <button type="button" onClick={() => setDobInputMode('dob')}
+                            className={`text-[10px] px-2 py-0.5 ${dobInputMode === 'dob' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/80'}`}>
+                            DOB
+                          </button>
+                          <button type="button" onClick={() => setDobInputMode('age')}
+                            className={`text-[10px] px-2 py-0.5 ${dobInputMode === 'age' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/80'}`}>
+                            Age
+                          </button>
+                        </div>
+                      </div>
+                      {dobInputMode === 'dob' ? (
+                        <Input type="date" className="h-7 text-xs" max={format(new Date(), 'yyyy-MM-dd')} min="1940-01-01"
+                          value={dob ? format(dob, 'yyyy-MM-dd') : ''}
+                          onChange={e => { const v = e.target.value; setDob(v ? new Date(v + 'T00:00:00') : null); }} />
+                      ) : (
+                        <Input type="number" className="h-7 text-xs" placeholder="e.g. 45" min="18" max="85"
+                          value={ageInput}
+                          onChange={e => applyAgeInput(e.target.value)} />
+                      )}
                       {mainAge !== null && mainTenorElig && (
-                        <p className="mt-0.5 text-[10px] text-muted-foreground">Age: <strong className="text-primary">{mainAge.years}y</strong> · Max: <strong className="text-primary">{mainTenorElig.salaried}m</strong></p>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          Age: <strong className="text-primary">{mainAge.years}y</strong>
+                          · Standard max: <strong className="text-primary">{mainTenorElig.salaried}m</strong>
+                          · Extended (70): <strong className="text-primary">{Math.min(300, Math.max(0, 70*12 - (mainAge.totalMonths) - 3))}m</strong>
+                          <span className="text-amber-600"> (ADIB/Mashreq no conditions; others need employer letter)</span>
+                        </p>
                       )}
                     </div>
                   </div>
 
                   {/* Segment-specific sections */}
                   {segment === 'self_employed' && <SelfEmployedSection info={seInfo} onChange={setSeInfo} />}
+
+                  {/* Live qualification readiness card */}
+                  {segment && (
+                    <QualificationReadinessCard
+                      segment={segment}
+                      income={totalIncome}
+                      liabilities={totalLiabilities}
+                      loanAmount={loanAmount}
+                      tenorMonths={tenorMonths}
+                      dob={dob}
+                      empType={empType}
+                      lobMonths={seInfo.lengthOfBusinessMonths}
+                      ownershipPct={seInfo.ownershipSharePercent}
+                      incomeRoute={seInfo.incomeRoute}
+                      nationality={nationality}
+                      residency={residency}
+                      emirate={emirate}
+                      txnType={txnType}
+                      salaryTransfer={salaryTransfer}
+                      propertyType={propertyType}
+                      purpose={purpose}
+                    />
+                  )}
                   {segment === 'non_resident' && (
                     <NonResidentSection info={nrInfo} onChange={(info) => { setNrInfo(info); setEmpType(info.employmentTypeNR || 'salaried'); }} />
                   )}
@@ -784,9 +843,13 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
                     </div>
                     <div>
                       <Label className="text-[10px] text-muted-foreground">Salary Transfer</Label>
-                      <Select value={salaryTransfer ? 'yes' : 'no'} onValueChange={v => setSalaryTransfer(v === 'yes')}>
+                      <Select value={salaryTransfer} onValueChange={v => setSalaryTransfer(v as 'stl' | 'nstl' | 'both')}>
                         <SelectTrigger className="mt-0.5 h-7 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="yes">Yes</SelectItem><SelectItem value="no">No</SelectItem></SelectContent>
+                        <SelectContent>
+                          <SelectItem value="both">Both (STL + NSTL)</SelectItem>
+                          <SelectItem value="stl">Salary Transfer (STL)</SelectItem>
+                          <SelectItem value="nstl">No Salary Transfer (NSTL)</SelectItem>
+                        </SelectContent>
                       </Select>
                     </div>
                     <div>
