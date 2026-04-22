@@ -18,18 +18,88 @@ export const COUNTRIES = [
   'United Kingdom','United States','Uruguay','Uzbekistan','Venezuela','Vietnam','Yemen','Zambia','Zimbabwe'
 ];
 
-export const INCOME_TYPES = [
+// Salaried income types
+export const SALARIED_INCOME_TYPES = [
   'Basic Salary', 'Housing Allowance', 'Transport Allowance', 'Air Ticket Allowance',
   'Educational Allowance', 'Travel Allowance', 'Bonus Fixed', 'Bonus Variable',
   'Commission Variable', 'Rental Income 1', 'Rental Income 2', 'Other Income'
+];
+
+// SE full doc income types — qualifying income = amount × ownership %
+export const SE_FULL_DOC_INCOME_TYPES = [
+  'SE Audited Revenue',  // revenue × profit margin from audits × ownership %
+  'SE VAT Revenue',      // VAT return revenue × ownership %
+  'SE Full Doc CTO',     // company turnover — bank applies their margin × ownership %
+  'Rental Income 1',     // rental always full doc — agreement + title deed required
+  'Rental Income 2',
+];
+
+// SE low doc income types — personal accounts (lower of DAB/MCTO is qualifying income)
+export const SE_LOW_DOC_PERSONAL_TYPES = [
+  'SE Personal DAB',     // daily average balance — personal current/savings account
+  'SE Personal MCTO',    // monthly credit turnover — personal account
+  // Note: lower of DAB and MCTO is used as qualifying income
+  // Note: rental income NOT included in low doc — already in personal account balances
+];
+
+// SE low doc income types — company accounts
+// Mashreq: 100% ownership required | CBD: ownership % applied to derive client share
+export const SE_LOW_DOC_COMPANY_TYPES = [
+  'SE Company DAB',      // daily average balance — company account
+  'SE Company MCTO',     // monthly credit turnover — company account
+  // Note: lower of DAB and MCTO is used as qualifying income
+];
+
+// All income types combined (for backward compat)
+export const INCOME_TYPES = [
+  ...SALARIED_INCOME_TYPES,
+  ...SE_FULL_DOC_INCOME_TYPES.filter(t => !SALARIED_INCOME_TYPES.includes(t)),
+  ...SE_LOW_DOC_PERSONAL_TYPES,
+  ...SE_LOW_DOC_COMPANY_TYPES,
 ];
 
 export const INCOME_DEFAULTS: Record<string, number> = {
   'Basic Salary': 100, 'Housing Allowance': 100, 'Transport Allowance': 100,
   'Air Ticket Allowance': 100, 'Educational Allowance': 100, 'Travel Allowance': 100,
   'Bonus Fixed': 0, 'Bonus Variable': 0, 'Commission Variable': 0,
-  'Rental Income 1': 0, 'Rental Income 2': 0, 'Other Income': 0
+  'Rental Income 1': 0, 'Rental Income 2': 0, 'Other Income': 0,
+  'SE Audited Revenue': 100, 'SE VAT Revenue': 100, 'SE Full Doc CTO': 100,
+  'SE Personal DAB': 100, 'SE Personal MCTO': 100,
+  'SE Company DAB': 100, 'SE Company MCTO': 100,
 };
+
+// STL options — three-way
+export type STLPreference = 'stl' | 'nstl' | 'both';
+export const STL_OPTIONS: { value: STLPreference; label: string }[] = [
+  { value: 'both', label: 'Both (STL + NSTL)' },
+  { value: 'stl', label: 'Salary Transfer (STL)' },
+  { value: 'nstl', label: 'No Salary Transfer (NSTL)' },
+];
+
+// LOB warning thresholds
+export function getLOBWarning(lobMonths: number | null): { level: 'none' | 'warning' | 'critical'; message: string } {
+  if (lobMonths === null) return { level: 'none', message: '' };
+  if (lobMonths < 24) return {
+    level: 'critical',
+    message: 'Under 2 years LOB — RAK Bank only. All other banks require minimum 2 years trading history.'
+  };
+  if (lobMonths < 36) return {
+    level: 'warning',
+    message: 'Under 3 years LOB — full doc options limited. Most banks require 3 years trading history.'
+  };
+  return { level: 'none', message: '' };
+}
+
+// Extended tenor — banks that allow age 70 without conditions
+export const BANKS_AGE_70_NO_CONDITIONS = ['ADIB', 'Mashreq'];
+export const BANKS_AGE_70_WITH_CONDITIONS = ['DIB']; // conditions apply per case
+// All other banks: age 70 possible with employer letter (no retirement age or retirement at 70)
+
+export function calculateExtendedTenor(dob: Date | null, employmentType: string): number {
+  if (!dob) return 300;
+  const ageMonths = getAgeFromDob(dob)?.totalMonths ?? 0;
+  return Math.min(300, Math.max(0, 70 * 12 - ageMonths - 3));
+}
 
 export const LIABILITY_TYPES = [
   'Personal Loan 1 EMI', 'Personal Loan 2 EMI', 'Auto Loan 1 EMI', 'Auto Loan 2 EMI',
