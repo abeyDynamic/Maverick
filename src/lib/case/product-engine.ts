@@ -26,7 +26,7 @@ export interface ProductSelectionContext {
   applicantSegment: string | null;
   preferredFixedMonths: number;
   preferredTransactionType: string;
-  salaryTransfer: boolean;
+  salaryTransfer: boolean | 'stl' | 'nstl' | 'both';
 }
 
 export const DEFAULT_COMPARISON_FIXED_MONTHS = 24;
@@ -154,9 +154,14 @@ export function selectPreferredProduct(products: ProductRow[], context: ProductS
   const chosen = [...rated].sort((a, b) => {
     if (a.transactionPriority !== b.transactionPriority) return a.transactionPriority - b.transactionPriority;
 
-    if (context.salaryTransfer) {
+    // STL preference — 'stl'/true/both prefer STL, 'nstl'/false prefer NSTL
+    if (context.salaryTransfer === 'stl' || context.salaryTransfer === true || context.salaryTransfer === 'both') {
       const stA = a.salary_transfer === true ? 0 : 1;
       const stB = b.salary_transfer === true ? 0 : 1;
+      if (stA !== stB) return stA - stB;
+    } else if (context.salaryTransfer === 'nstl' || context.salaryTransfer === false) {
+      const stA = a.salary_transfer === false ? 0 : 1;
+      const stB = b.salary_transfer === false ? 0 : 1;
       if (stA !== stB) return stA - stB;
     }
 
