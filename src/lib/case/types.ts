@@ -14,11 +14,23 @@ export function deriveSegment(residencyStatus: string, employmentType: string): 
   return 'resident_salaried';
 }
 
+export type SEIncomeRoute =
+  | 'audited_revenue'       // Full doc — audited financials, revenue × profit margin × ownership %
+  | 'vat_revenue'           // Full doc — VAT returns revenue × ownership %
+  | 'full_doc_cto'          // Full doc — company turnover, bank applies margin × ownership %
+  | 'low_doc_personal_dab'  // Low doc — personal DAB (lower of DAB/MCTO used)
+  | 'low_doc_personal_mcto' // Low doc — personal MCTO (lower of DAB/MCTO used)
+  | 'low_doc_company_dab'   // Low doc — company DAB (Mashreq: 100% only; CBD: ownership % applied)
+  | 'low_doc_company_mcto'  // Low doc — company MCTO (same constraints as company DAB)
+  | '';
+
 export interface SelfEmployedInfo {
   docType: 'full_doc' | 'low_doc' | '';
+  incomeRoute: SEIncomeRoute;              // Replaces incomeBasis — specific route
   businessName: string;
-  lengthOfBusinessMonths: number | null;   // months
-  incomeBasis: string;                      // 'audited_financials' | 'bank_statements' | 'trade_license' | ''
+  lengthOfBusinessMonths: number | null;   // months — LOB
+  ownershipSharePercent: number | null;    // % ownership — drives income calculation and bank routing
+  incomeBasis: string;                     // kept for backward compat
 }
 
 export interface NonResidentInfo {
@@ -29,7 +41,8 @@ export interface NonResidentInfo {
 }
 
 export const EMPTY_SE_INFO: SelfEmployedInfo = {
-  docType: '', businessName: '', lengthOfBusinessMonths: null, incomeBasis: '',
+  docType: '', incomeRoute: '', businessName: '', lengthOfBusinessMonths: null,
+  ownershipSharePercent: null, incomeBasis: '',
 };
 
 export const EMPTY_NR_INFO: NonResidentInfo = {
