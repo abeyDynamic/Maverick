@@ -1,155 +1,181 @@
-import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
-import { Plus, FileText, LogOut, Shield } from 'lucide-react';
-import { formatCurrency } from '@/lib/mortgage-utils';
+import { useAuth } from '@/contexts/AuthContext';
 import GlobalTickerBar from '@/components/GlobalTickerBar';
 import DashboardEiborChart from '@/components/dashboard/DashboardEiborChart';
+import { Button } from '@/components/ui/button';
+import { formatCurrency } from '@/lib/mortgage-utils';
+import { format } from 'date-fns';
+import { Plus, FileText, Settings, LogOut, TrendingUp } from 'lucide-react';
 
-interface QualRow {
+interface RecentCase {
   id: string;
   full_name: string | null;
+  created_at: string;
+  latest_dbr: number | null;
   loan_amount: number | null;
-  dbr_percent: number | null;
-  saved_at: string;
 }
 
 export default function Dashboard() {
   const { user, role, signOut } = useAuth();
   const navigate = useNavigate();
-  const [qualifications, setQualifications] = useState<QualRow[]>([]);
+  const [cases, setCases] = useState<RecentCase[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
-
     async function load() {
-      // Fetch applicants with saved results summary
-      // Join applicants with qualification_results
-      const { data: results } = await supabase
-        .from('qualification_results')
-        .select('applicant_id, loan_amount, dbr_percent, saved_at, applicants!inner(id, full_name, user_id)')
-        .eq('applicants.user_id', user!.id)
-        .order('saved_at', { ascending: false })
-        .limit(20) as any;
+      const { data } = await supabase
+        .from('applicants')
+        .select(`
+          id, full_name, created_at,
+          qualification_results (loan_amount, dbr_percent)
+        `)
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-      if (!results) { setQualifications([]); return; }
-
-      const rows: QualRow[] = (results as any[]).map((r: any) => ({
-        id: r.applicant_id,
-        full_name: r.applicants?.full_name ?? null,
-        loan_amount: r.loan_amount ?? null,
-        dbr_percent: r.dbr_percent ?? null,
-        saved_at: r.saved_at,
-      }));
-
-      setQualifications(rows);
+      const mapped = (data ?? []).map((a: any) => {
+        const latest = a.qualification_results?.[a.qualification_results.length - 1];
+        return {
+          id: a.id,
+          full_name: a.full_name,
+          created_at: a.created_at,
+          latest_dbr: latest?.dbr_percent ?? null,
+          loan_amount: latest?.loan_amount ?? null,
+        };
+      });
+      setCases(mapped);
+      setLoading(false);
     }
-
-    load();
+    if (user) load();
   }, [user]);
 
-  const count = qualifications.length;
+  const dbrColor = (dbr: number | null) => {
+    if (!dbr) return 'text-muted-foreground';
+    if (dbr < 42) return 'text-[hsl(174,85%,30%)]';
+    if (dbr <= 50) return 'text-amber-600';
+    return 'text-red-500';
+  };
 
   return (
-    <div className="min-h-screen bg-secondary">
-      <header className="bg-primary text-primary-foreground">
-        <div className="container mx-auto flex items-center justify-between py-4 px-6">
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header style={{ background: 'hsl(216,75%,12%)' }} className="text-white">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-accent">
-              <span className="text-sm font-bold text-accent-foreground">M</span>
+            <div className="w-7 h-7 rounded-md bg-white/10 flex items-center justify-center">
+              <TrendingUp className="h-4 w-4 text-white" />
             </div>
-            <h1 className="text-xl font-semibold">Maverick Mortgage Engine</h1>
+            <div>
+              <h1 className="text-base font-semibold tracking-tight">Maverick</h1>
+              <p className="text-[10px] text-white/40 -mt-0.5 uppercase tracking-widest">KSquare Mortgages</p>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-white/40 mr-2">
+              {user?.email} · <span className="capitalize">{role}</span>
+            </span>
             {role === 'admin' && (
-              <Button variant="ghost" size="sm" className="text-primary-foreground hover:bg-accent" onClick={() => navigate('/admin')}>
-                <Shield className="mr-1 h-4 w-4" /> Admin
+              <Button variant="ghost" size="sm"
+                className="text-white/60 hover:text-white hover:bg-white/10 h-8 px-3 text-xs"
+                onClick={() => navigate('/admin')}>
+                <Settings className="h-3.5 w-3.5 mr-1.5" /> Admin
               </Button>
             )}
-            <Button variant="ghost" size="sm" className="text-primary-foreground hover:bg-accent" onClick={signOut}>
-              <LogOut className="mr-1 h-4 w-4" /> Sign Out
+            <Button variant="ghost" size="sm"
+              className="text-white/60 hover:text-white hover:bg-white/10 h-8 px-3 text-xs"
+              onClick={signOut}>
+              <LogOut className="h-3.5 w-3.5 mr-1.5" /> Sign out
             </Button>
           </div>
         </div>
       </header>
       <GlobalTickerBar />
 
-      <main className="container mx-auto px-6 py-8">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-primary">Dashboard</h2>
-            <p className="text-muted-foreground">Welcome back, {user?.email}</p>
-          </div>
-          <Button onClick={() => navigate('/qualify/new')} className="bg-accent text-accent-foreground hover:bg-mid-blue">
-            <Plus className="mr-2 h-4 w-4" /> New Qualification
-          </Button>
-        </div>
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        <div className="grid grid-cols-3 gap-6">
 
-        <div className="grid gap-6 md:grid-cols-3 mb-8">
-          <Card className="bg-background">
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total Qualifications</CardTitle></CardHeader>
-            <CardContent><p className="text-3xl font-bold text-primary">{count}</p></CardContent>
-          </Card>
-          <Card className="bg-background">
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">This Month</CardTitle></CardHeader>
-            <CardContent><p className="text-3xl font-bold text-primary">{qualifications.filter(a => {
-              const d = new Date(a.saved_at);
-              const now = new Date();
-              return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-            }).length}</p></CardContent>
-          </Card>
-          <Card className="bg-background">
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Role</CardTitle></CardHeader>
-            <CardContent><p className="text-3xl font-bold text-accent capitalize">{role || 'adviser'}</p></CardContent>
-          </Card>
-        </div>
+          {/* Left — Cases */}
+          <div className="col-span-1 space-y-5">
+            {/* New qualification CTA */}
+            <div className="result-panel">
+              <p className="result-panel-eyebrow">Qualification Engine</p>
+              <p className="text-white text-lg font-semibold mt-1 mb-1">
+                Start a new case
+              </p>
+              <p className="text-white/50 text-[12px] mb-5">
+                Check eligibility across 8 UAE banks instantly.
+              </p>
+              <button
+                onClick={() => navigate('/qualify/new')}
+                className="w-full py-2.5 rounded-lg text-sm font-semibold transition-all"
+                style={{ background: 'hsl(174,85%,32%)', color: 'white' }}
+              >
+                <Plus className="inline h-4 w-4 mr-1.5 -mt-0.5" />
+                New Qualification
+              </button>
+            </div>
 
-        <Card className="bg-background">
-          <CardHeader>
-            <CardTitle className="text-lg text-primary">Recent Qualifications</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {qualifications.length === 0 ? (
-              <p className="text-muted-foreground py-8 text-center">No qualifications yet. Start your first one!</p>
-            ) : (
-              <div className="space-y-3">
-                {qualifications.map(q => (
-                  <div
-                    key={q.id}
-                    className="flex items-center justify-between rounded-lg border p-4 hover:bg-secondary cursor-pointer transition-colors"
-                    onClick={() => navigate(`/qualify/${q.id}`)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-5 w-5 text-accent" />
-                      <div>
-                        <p className="font-medium text-primary">
-                          {q.full_name || 'Unnamed Client'}
-                        </p>
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-                          {q.loan_amount != null && (
-                            <span>AED {formatCurrency(q.loan_amount)}</span>
-                          )}
-                          {q.dbr_percent != null && (
-                            <span>DBR: <strong className="text-foreground">{Number(q.dbr_percent).toFixed(1)}%</strong></span>
-                          )}
-                          <span>{new Date(q.saved_at).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm">Open</Button>
-                  </div>
-                ))}
+            {/* Recent cases */}
+            <div>
+              <div className="form-section-title mb-3">
+                <span>Recent Cases</span>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              {loading ? (
+                <div className="space-y-2">
+                  {[1,2,3].map(i => (
+                    <div key={i} className="h-16 rounded-lg bg-border/40 animate-pulse" />
+                  ))}
+                </div>
+              ) : cases.length === 0 ? (
+                <div className="surface p-6 text-center">
+                  <FileText className="h-8 w-8 text-border mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">No cases yet</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {cases.map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => navigate(`/qualify/${c.id}`)}
+                      className="w-full surface p-3.5 text-left hover:border-[hsl(213,65%,30%)] transition-colors group"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">
+                            {c.full_name || 'Unnamed case'}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            {format(new Date(c.created_at), 'dd MMM yyyy')}
+                            {c.loan_amount ? ` · AED ${formatCurrency(c.loan_amount)}` : ''}
+                          </p>
+                        </div>
+                        {c.latest_dbr !== null && (
+                          <div className="text-right flex-shrink-0 ml-3">
+                            <p className={`text-sm font-mono font-semibold ${dbrColor(c.latest_dbr)}`}>
+                              {c.latest_dbr.toFixed(1)}%
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">DBR</p>
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
 
-        {/* EIBOR Chart Section */}
-        <DashboardEiborChart />
+          {/* Right — EIBOR chart */}
+          <div className="col-span-2">
+            <div className="form-section-title mb-4">
+              <span>EIBOR Rate History</span>
+            </div>
+            <DashboardEiborChart />
+          </div>
+
+        </div>
       </main>
     </div>
   );
