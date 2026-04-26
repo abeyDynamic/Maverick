@@ -183,13 +183,17 @@ export async function saveQualificationSnapshot(params: SaveParams): Promise<str
     appId = created.id;
   }
 
-  await supabase.from('qualification_results').insert({
-    applicant_id: appId,
-    loan_amount: property.loanAmount || null,
-    dbr_percent: representativeDbr,
-    bank_results: savedBankResults,
-    cost_comparison: savedCostComparison,
-  } as any);
+  await supabase.from('qualification_results')
+  .delete()
+  .eq('applicant_id', appId);
+
+await supabase.from('qualification_results').insert({
+  applicant_id: appId,
+  loan_amount: property.loanAmount || null,
+  dbr_percent: representativeDbr,
+  bank_results: savedBankResults,
+  cost_comparison: savedCostComparison,
+} as any);
 
   const { error: propInsertError } = await supabase.from('property_details').insert({
     applicant_id: appId,
