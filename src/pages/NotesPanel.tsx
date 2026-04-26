@@ -61,8 +61,13 @@ export interface WhatIfContext {
 
 interface NotesPanelProps {
   applicantId?: string;
+  clientName?: string;
+  onClientNameChange?: (name: string) => void;
+  onSave?: () => void;
+  isSaving?: boolean;
+  lastSaved?: Date | null;
   onExtract: (result: ExtractionResult) => void;
-  onRequestSave?: () => Promise<string | undefined>; // returns applicantId after save
+  onRequestSave?: () => Promise<string | undefined>;
   whatIfContext: WhatIfContext;
   embedded?: boolean;
 }
@@ -117,7 +122,7 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     return num;
   }
 
-  // Client name — patterns like "for Ahmad", "client is John Smith", "name: Jane"
+  // Client name
   const namePatterns = [
     /(?:client(?:'s)?\s+(?:name|is)|for|prepared\s+for|name\s*:)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/i,
     /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})[\s,]/m,
@@ -148,7 +153,7 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     result.employment_type = 'salaried'; if (!result.segment) result.segment = 'resident_salaried'; result.confidence.personal += 0.2;
   }
 
-  // DOB — patterns like "dob 15/03/1985", "born 15 march 1985", "date of birth 1985-03-15"
+  // DOB
   const dobPatterns = [
     /(?:dob|date\s+of\s+birth|born(?:\s+on)?)\s*:?\s*(\d{1,2})[/-](\d{1,2})[/-](\d{4})/i,
     /(?:dob|date\s+of\s+birth|born(?:\s+on)?)\s*:?\s*(\d{4})[/-](\d{1,2})[/-](\d{1,2})/i,
@@ -168,7 +173,7 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     }
   }
 
-  // Age — "client is 45 years", "aged 45", "age 45"
+  // Age
   if (!result.dob) {
     const ageMatch = notes.match(/(?:aged?|is|\bage\b)\s+(\d{2})\s*(?:years?|yrs?|y\.o\.)?/i);
     if (ageMatch) {
@@ -182,7 +187,7 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     }
   }
 
-  // Salary transfer — STL/NSTL/both
+  // Salary transfer
   if (text.includes('no salary transfer') || text.includes('nstl') || text.includes('non-stl') || text.includes('not transfer')) {
     result.salary_transfer = false;
   } else if (text.includes('salary transfer') || text.includes('\bstl\b') || text.includes('transfer salary')) {
@@ -214,7 +219,7 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     || notes.match(/(?:finance|mortgage|borrow)\s+(?:of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i);
   if (loanMatch) { const val = parseAmount(loanMatch[loanMatch.length - 1]); if (val && val > 50000) { result.loan_amount = val; result.confidence.property += 0.3; } }
 
-  // Calculate missing property values
+  // Calculate missing
   if (result.property_value && result.ltv && !result.loan_amount) result.loan_amount = Math.round(result.property_value * result.ltv / 100);
   if (result.property_value && result.loan_amount && !result.ltv) result.ltv = Math.round((result.loan_amount / result.property_value) * 100);
 
@@ -238,9 +243,7 @@ function ruleBasedExtract(notes: string): ExtractionResult {
   else if (text.includes('first home') || text.includes('first time buyer') || text.includes('first property')) result.purpose = 'First Home';
   else if (text.includes('second home')) result.purpose = 'Second Home';
 
-  // ── INCOME ──
-
-  // Salaried income
+  // Income
   const incomeMap = [
     { type: 'Basic Salary', patterns: [
       /basic\s+salary\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i,
@@ -255,7 +258,6 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     { type: 'Bonus Variable', patterns: [/(?:variable|performance)\s+bonus\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
     { type: 'Commission Variable', patterns: [/commission\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
     { type: 'Rental Income 1', patterns: [/rental\s+income\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i, /rent\s+(?:received|income|of)\s+(?:aed\s*)?([\d.,]+[km]?)/i] },
-    // SE income types
     { type: 'SE Audited Revenue', patterns: [/(?:audited\s+)?revenue\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i, /turnover\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
     { type: 'SE Personal DAB', patterns: [/(?:personal\s+)?(?:dab|daily\s+average\s+balance)\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
     { type: 'SE Personal MCTO', patterns: [/(?:personal\s+)?(?:mcto|monthly\s+credit\s+turnover)\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
@@ -279,8 +281,7 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     }
   }
 
-  // ── LIABILITIES ──
-  // Personal loan — also captures PL bank "personal loan at ENBD 5500"
+  // Liabilities
   const plPatterns = [
     /(?:personal\s+loan|\bpl\b)\s+(?:at\s+\w+\s+)?(?:emi|instalment|of|is)?\s*(?:aed\s*)?([\d.,]+[km]?)/i,
     /(?:pl|personal\s+loan)\s+(?:aed\s*)?([\d.,]+[km]?)\s*(?:\/mo(?:nth)?)?/i,
@@ -297,7 +298,6 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     }
   }
 
-  // Auto/car loan
   const carMatch = notes.match(/(?:car\s+loan|auto\s+loan|\bal\b|vehicle\s+loan)\s+(?:emi|of|is)?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
   if (carMatch) {
     const val = parseAmount(carMatch[carMatch.length - 1]);
@@ -307,7 +307,6 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     }
   }
 
-  // Credit cards
   const ccMatches = [...notes.matchAll(/(?:credit\s+card|\bcc\b)\s*(?:\d)?\s*(?:limit\s+)?(?:of\s+|is\s+)?(?:aed\s*)?([\d.,]+[km]?)/gi)];
   ccMatches.slice(0, 3).forEach((m, i) => {
     const val = parseAmount(m[1]);
@@ -317,7 +316,6 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     }
   });
 
-  // Home loan / existing mortgage
   const homeLoanMatch = notes.match(/(?:existing\s+mortgage|home\s+loan|existing\s+loan)\s+(?:emi|of|is)?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
   if (homeLoanMatch) {
     const val = parseAmount(homeLoanMatch[homeLoanMatch.length - 1]);
@@ -425,8 +423,6 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
 
   return (
     <div className="space-y-3">
-
-      {/* Live DBR card */}
       <div className={`rounded-lg border px-3 py-2.5 ${dbrBg}`}>
         <div className="flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Live DBR estimate</span>
@@ -443,7 +439,6 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
         {dbr === 0 && <p className="text-[10px] text-muted-foreground mt-0.5">Add income + property to see estimate</p>}
       </div>
 
-      {/* Missing critical fields */}
       {critical.length > 0 && (
         <div className="space-y-1.5">
           <p className="text-[10px] font-semibold text-red-600 uppercase tracking-wide">Missing — needed for DBR</p>
@@ -483,7 +478,6 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
         </div>
       )}
 
-      {/* Missing important fields */}
       {important.length > 0 && (
         <div className="space-y-1">
           <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide">Also needed — bank matching</p>
@@ -521,7 +515,6 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
         </div>
       )}
 
-      {/* Confirmed fields */}
       {confirmed.length > 0 && (
         <div className="space-y-1">
           <p className="text-[10px] font-semibold text-green-700 uppercase tracking-wide">Confirmed</p>
@@ -536,7 +529,6 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
         </div>
       )}
 
-      {/* Actions */}
       <div className="flex gap-2 pt-1">
         <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={onDiscard}>Discard</Button>
         <Button size="sm" className="flex-1 text-xs bg-green-600 hover:bg-green-700 text-white" onClick={onApply}>
@@ -549,7 +541,18 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export default function NotesPanel({ applicantId, onExtract, onRequestSave, whatIfContext, embedded = false }: NotesPanelProps) {
+export default function NotesPanel({
+  applicantId,
+  clientName = '',
+  onClientNameChange,
+  onSave,
+  isSaving = false,
+  lastSaved,
+  onExtract,
+  onRequestSave,
+  whatIfContext,
+  embedded = false,
+}: NotesPanelProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [minimised, setMinimised] = useState(false);
@@ -601,22 +604,21 @@ export default function NotesPanel({ applicantId, onExtract, onRequestSave, what
     let aid = resolvedId || applicantId;
     if (!aid && onRequestSave) {
       aid = await onRequestSave();
-      if (aid) setResolvedId(aid); // persist so subsequent saves reuse same record
+      if (aid) setResolvedId(aid);
     }
     if (!aid) {
-      toast.error('Please save the qualification first.');
+      toast.error('Please save the case first.');
       return;
     }
     const { error } = await supabase.from('client_notes' as any).insert({
       applicant_id: aid,
       note_text: text.trim(),
       created_by: user.id,
-      session_label: sessionLabel.trim() || null
+      session_label: sessionLabel.trim() || null,
     });
     if (error) { toast.error('Note could not be saved'); return; }
     toast.success('Note saved');
     setSessionLabel('');
-    // Explicitly reload with the resolved id — applicantId prop may still be undefined
     const { data } = await supabase.from('client_notes' as any)
       .select('id, note_text, created_at, session_label')
       .eq('applicant_id', aid)
@@ -656,7 +658,6 @@ export default function NotesPanel({ applicantId, onExtract, onRequestSave, what
     saveNote(draft);
     setExtracted(null);
     toast.success('Fields applied to form');
-    // Keep draft visible — don't clear
   }
 
   async function handleChatSend() {
@@ -719,7 +720,6 @@ export default function NotesPanel({ applicantId, onExtract, onRequestSave, what
     );
   }
 
-  // Embedded mode: always open, no close/minimise controls, fills column height
   const wrapClass = embedded
     ? 'flex flex-col h-full'
     : 'fixed bottom-6 right-6 z-50 w-[480px] shadow-2xl max-h-[90vh] flex flex-col';
@@ -754,8 +754,44 @@ export default function NotesPanel({ applicantId, onExtract, onRequestSave, what
         </CardHeader>
 
         {(!minimised || embedded) && (
-          <CardContent className="px-4 pb-4 pt-3 space-y-3 overflow-y-auto">
-            {/* Tabs */}
+          <CardContent className="px-4 pb-4 pt-3 space-y-3 overflow-y-auto flex-1 min-h-0">
+
+            {/* ── CLIENT NAME + SAVE — embedded only ── */}
+            {embedded && (
+              <div className="space-y-1 pb-3 border-b">
+                <div className="flex gap-2 items-center">
+                  <input
+                    className="flex-1 min-w-0 text-sm font-medium border border-input rounded-md px-3 py-1.5 bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    placeholder="Client name…"
+                    value={clientName}
+                    onChange={e => onClientNameChange?.(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && clientName.trim()) onSave?.(); }}
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 px-3 text-xs bg-accent text-accent-foreground hover:bg-accent/90 shrink-0 gap-1.5"
+                    disabled={isSaving || !clientName.trim()}
+                    onClick={onSave}
+                  >
+                    {isSaving ? (
+                      <>
+                        <span className="h-3 w-3 rounded-full border-2 border-current border-t-transparent animate-spin inline-block" />
+                        Saving…
+                      </>
+                    ) : (
+                      'Save case'
+                    )}
+                  </Button>
+                </div>
+                {lastSaved && (
+                  <p className="text-[10px] text-muted-foreground pl-0.5">
+                    ✓ Saved {format(lastSaved, 'HH:mm')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* ── TABS ── */}
             <div className="flex gap-1 border-b pb-2 shrink-0">
               {(['notes', 'whatif', 'history'] as const).map(t => (
                 <button key={t} onClick={() => setTab(t)}
@@ -768,7 +804,6 @@ export default function NotesPanel({ applicantId, onExtract, onRequestSave, what
             {/* ── NOTES TAB ── */}
             {tab === 'notes' && (
               <div className="space-y-2">
-                {/* Show qual card if extracted, notes input otherwise */}
                 {!extracted ? (
                   <>
                     <input className="w-full text-xs border border-input rounded-md px-3 py-1.5 bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
@@ -777,7 +812,6 @@ export default function NotesPanel({ applicantId, onExtract, onRequestSave, what
                     <Textarea className="text-xs min-h-[120px] resize-none"
                       placeholder={`e.g. "Indian national, salaried in UAE, salary 32k, cc limit 50k, looking at 2.5M villa Dubai, resale, 80% LTV..."`}
                       value={draft} onChange={e => setDraft(e.target.value)} />
-                    
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-muted-foreground">Extract via:</span>
                       <button onClick={() => setExtractMode('rule')} className={`text-[10px] px-2 py-0.5 rounded ${extractMode === 'rule' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground border border-border'}`}>Rule-based (free)</button>
@@ -794,7 +828,6 @@ export default function NotesPanel({ applicantId, onExtract, onRequestSave, what
                   </>
                 ) : (
                   <>
-                    {/* Notes still visible above the card */}
                     <div className="bg-secondary/40 rounded-md px-3 py-2 text-xs text-muted-foreground leading-relaxed max-h-[80px] overflow-y-auto border border-border">
                       {draft}
                     </div>
@@ -867,6 +900,7 @@ export default function NotesPanel({ applicantId, onExtract, onRequestSave, what
                 ))}
               </div>
             )}
+
           </CardContent>
         )}
       </Card>
