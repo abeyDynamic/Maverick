@@ -572,7 +572,9 @@ export default function NotesPanel({
   const popoutRef = useRef<Window | null>(null);
 
   useEffect(() => { if (applicantId) setResolvedId(applicantId); }, [applicantId]);
-  useEffect(() => { if (open && (resolvedId || applicantId)) loadHistory(); }, [open, resolvedId, applicantId]);
+  useEffect(() => {
+  if (resolvedId || applicantId) loadHistory();
+}, [resolvedId, applicantId]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
 
   useEffect(() => {
