@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { QualNote } from '@/components/results/BankEligibilityTable';
 import { SessionRemindersPanel } from '@/components/results/BankEligibilityTable';
@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowLeft, Plus, Save } from 'lucide-react';
+import { ArrowLeft, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { FieldSelector } from '@/components/qualify/FieldSelector';
@@ -114,7 +114,12 @@ interface QualifyNewProps {
 export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [saving, setSaving] = useState(false);
+
+  // Save state
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentAppIdRef = useRef<string | undefined>(editApplicantId);
 
   // Banks, notes & products from Supabase
   const [banks, setBanks] = useState<CaseBank[]>([]);
@@ -184,6 +189,8 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   // Load existing applicant data when editing
   useEffect(() => {
     if (!editApplicantId) return;
+    // Keep ref in sync when editing an existing case
+    currentAppIdRef.current = editApplicantId;
     async function loadApplicant() {
       const [appRes, propRes, incRes, liabRes, cbRes] = await Promise.all([
         supabase.from('applicants').select('*').eq('id', editApplicantId).single(),
@@ -299,11 +306,11 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     setAgeInput(ageStr);
     const age = parseInt(ageStr);
     if (!isNaN(age) && age > 18 && age < 90) {
-      // Approximate DOB from age — use July 1 of birth year as midpoint
       const birthYear = new Date().getFullYear() - age;
-      setDob(new Date(birthYear, 6, 1)); // July 1
+      setDob(new Date(birthYear, 6, 1));
     }
   }
+
   const mainTenorElig = useMemo(() => mainAge !== null ? getTenorEligibility(mainAge.totalMonths) : null, [mainAge]);
 
   const { bindingTenor, bindingName } = useMemo(
@@ -327,15 +334,14 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     [engineLiabilityFields, engineCoBorrowers]
   );
 
-  // Extended tenor cap (age 70) — absolute maximum for ADIB/Mashreq
-  // bindingTenor (age 65) is advisory — adviser can override up to age 70
   const extendedTenor = useMemo(() => {
     if (!dob) return 300;
     const ageMonths = getAgeFromDob(dob)?.totalMonths ?? 0;
     return Math.min(300, Math.max(0, 70 * 12 - ageMonths - 3));
   }, [dob]);
+
   const effectiveTenor = dob
-    ? Math.min(tenorMonths, extendedTenor)   // hard cap at age 70
+    ? Math.min(tenorMonths, extendedTenor)
     : Math.min(tenorMonths, 300);
 
   // ── Stage 1 via engine ──
@@ -361,7 +367,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
       setPolicyTerms([]);
       return;
     }
-
     async function loadPolicyTerms() {
       const { data } = await supabase
         .from('policy_terms')
@@ -369,16 +374,13 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         .in('bank', bankNames)
         .eq('segment', policySegment)
         .eq('employment_type', policyEmployment);
-
       setPolicyTerms((data ?? []) as PolicyTerm[]);
     }
-
     loadPolicyTerms();
   }, [bankNames, bankNamesKey, policyEmployment, policySegment]);
 
   const resolvedSegment: QualSegment = segment || deriveSegment(residency, empType);
 
-  // Derive qualification profile fields
   const qualProfile = useMemo(() => {
     const segmentPath = resolvedSegment;
     const employmentSubtype = empType || 'salaried';
@@ -388,7 +390,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     return { segmentPath, employmentSubtype, docPath, routeType };
   }, [resolvedSegment, empType, seInfo.docType, nrInfo.dabRequired, salaryTransfer]);
 
-  // Route support filtering — exclude banks that don't support this route
   useEffect(() => {
     if (routeSupport.length === 0) {
       setBanks(allBanks);
@@ -398,7 +399,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     const exclusions: Record<string, string> = {};
     const filtered = allBanks.filter(bank => {
       const bankRoutes = routeSupport.filter(r => r.bank_id === bank.id && r.segment_path === qualProfile.segmentPath);
-      if (bankRoutes.length === 0) return true; // no route data = allow
+      if (bankRoutes.length === 0) return true;
       const matchingRoute = bankRoutes.find(r => r.route_type === qualProfile.routeType);
       if (matchingRoute && !matchingRoute.supported) {
         exclusions[bank.id] = `Route not supported: ${qualProfile.segmentPath}/${qualProfile.routeType}`;
@@ -422,7 +423,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     [bankResults, policyTerms, totalIncome, loanAmount, nationality, emirate, empType, resolvedSegment]
   );
 
-  // ── Structured rules evaluation per bank ──
   const structuredEvalByBank = useMemo<Record<string, BankStructuredEvaluation>>(() => {
     if (eligibilityRules.length === 0 && incomePolicies.length === 0) return {};
     const result: Record<string, BankStructuredEvaluation> = {};
@@ -446,13 +446,10 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     return result;
   }, [bankResults, eligibilityRules, incomePolicies, qualProfile, totalIncome, loanAmount, ltv, effectiveTenor, seInfo.lengthOfBusinessMonths, nationality, emirate]);
 
-  // ── Final eligibility: combine Stage 1, Stage 2 (legacy), and structured rules ──
   const finalEligibleBankIds = useMemo(() => {
     return Object.values(stage2ByBank)
       .filter(entry => {
-        // Legacy stage2 check
         if (!entry.productEligible) return false;
-        // If structured rules exist for this bank, also require no critical fail
         const structured = structuredEvalByBank[entry.bankId];
         if (structured && structured.ruleResults.length > 0) {
           if (structured.hasCriticalFail) return false;
@@ -473,12 +470,10 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     [bankResults, finalEligibleBankIdSet]
   );
 
-  // ── Product filtering: respect segment/doc/route fields on products ──
   const productsByBank = useMemo<Record<string, ProductData>>(
     () => {
       const segmentFilteredProducts = productRows.filter(product => {
         if (!finalEligibleBankIdSet.has(product.bank_id)) return false;
-        // Filter by product segment/doc/route fields if they exist
         const p = product as any;
         if (p.employment_subtype && p.employment_subtype !== qualProfile.employmentSubtype) return false;
         if (p.doc_path && p.doc_path !== qualProfile.docPath) return false;
@@ -491,7 +486,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         applicantSegment: getApplicantSegment(empType),
         preferredFixedMonths: DEFAULT_COMPARISON_FIXED_MONTHS,
         preferredTransactionType: txnType,
-        salaryTransfer: salaryTransfer, // 'stl' | 'nstl' | 'both' — product engine handles all three
+        salaryTransfer: salaryTransfer,
       });
     },
     [productRows, finalEligibleBankIdSet, residency, empType, txnType, salaryTransfer, qualProfile]
@@ -509,6 +504,90 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     [bankResults, totalIncome, totalLiabilities, engineLiabilityFields]
   );
 
+  // ── Save logic ──
+
+  async function performSave(silent = false): Promise<string | undefined> {
+    if (!user) return undefined;
+    if (!clientName.trim()) {
+      if (!silent) toast.error('Enter a client name to save');
+      return undefined;
+    }
+    if (!silent) setIsSaving(true);
+    try {
+      const resolvedSeg = segment || deriveSegment(residency || 'resident_expat', empType);
+      const appId = await saveQualificationSnapshot({
+        userId: user.id,
+        editApplicantId: currentAppIdRef.current,
+        applicant: {
+          fullName: clientName.trim(),
+          residencyStatus: residency || 'resident_expat',
+          nationality: nationality || '',
+          dateOfBirth: dob,
+          employmentType: empType || '',
+          segment: resolvedSeg,
+          selfEmployedInfo: resolvedSeg === 'self_employed' ? seInfo : undefined,
+          nonResidentInfo: resolvedSeg === 'non_resident' ? nrInfo : undefined,
+        },
+        property: {
+          propertyValue, loanAmount, ltv, emirate, isDIFC, isAlAin,
+          transactionType: txnType, salaryTransfer: salaryTransfer === 'stl', propertyType, purpose,
+          loanTypePreference: loanTypePref, preferredTenorMonths: tenorMonths,
+          nominalRate, stressRate,
+        },
+        incomeFields: engineIncomeFields,
+        liabilityFields: engineLiabilityFields,
+        coBorrowers: engineCoBorrowers,
+        bankResults,
+        stage2ByBank,
+        finalEligibleBankIds,
+        productsByBank,
+        qualNotes,
+        effectiveTenor,
+      });
+      currentAppIdRef.current = appId;
+      setLastSaved(new Date());
+      if (!silent) {
+        toast.success('Case saved');
+        navigate(`/qualify/${appId}`);
+      } else {
+        // First-time auto-save: update URL without navigating
+        if (!editApplicantId) {
+          window.history.replaceState(null, '', `/qualify/${appId}`);
+        }
+      }
+      return appId;
+    } catch (e: any) {
+      if (!silent) toast.error(e.message || 'Failed to save');
+      return undefined;
+    } finally {
+      if (!silent) setIsSaving(false);
+    }
+  }
+
+  // Debounced auto-save — only fires if case already has an ID (never auto-creates)
+  const triggerAutoSave = useCallback(() => {
+    if (!currentAppIdRef.current) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      performSave(true);
+    }, 3000);
+  }, []);
+
+  useEffect(() => {
+    triggerAutoSave();
+    return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
+  }, [
+    clientName, residency, nationality, dob, empType, propertyValue, loanAmount, ltv,
+    emirate, txnType, salaryTransfer, propertyType, purpose, tenorMonths, nominalRate,
+    stressRate, engineIncomeFields, engineLiabilityFields, engineCoBorrowers,
+  ]);
+
+  // handleSaveForNotes — used by NotesPanel to create a case before attaching a note
+  async function handleSaveForNotes(): Promise<string | undefined> {
+    return performSave(false);
+  }
+
+  // ── Form handlers ──
 
   function handleIncomeTypesChange(types: string[]) {
     setSelectedIncomeTypes(types);
@@ -547,7 +626,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     if (val !== 'abu_dhabi') setIsAlAin(false);
   }
 
-  // ── Notes extraction handler — hydrates form state from extracted result ──
   function handleExtract(result: ExtractionResult) {
     if (result.client_name) setClientName(result.client_name);
     if (result.segment) setSegment(result.segment as any);
@@ -585,97 +663,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     }
   }
 
-  // ── Save via snapshot service ──
-  async function handleSave() {
-    if (!user) return;
-    if (!residency) { toast.error('Residency Status is required'); return; }
-    if (!nationality) { toast.error('Nationality is required'); return; }
-    // DOB optional — tenor uses default 300m if not provided
-
-    setSaving(true);
-    try {
-      const resolvedSegment = segment || deriveSegment(residency, empType);
-      const appId = await saveQualificationSnapshot({
-        userId: user.id,
-        editApplicantId,
-        applicant: {
-          fullName: clientName,
-          residencyStatus: residency,
-          nationality,
-          dateOfBirth: dob,
-          employmentType: empType,
-          segment: resolvedSegment,
-          selfEmployedInfo: resolvedSegment === 'self_employed' ? seInfo : undefined,
-          nonResidentInfo: resolvedSegment === 'non_resident' ? nrInfo : undefined,
-        },
-        property: {
-          propertyValue, loanAmount, ltv, emirate, isDIFC, isAlAin,
-          transactionType: txnType, salaryTransfer: salaryTransfer === 'stl', propertyType, purpose,
-          loanTypePreference: loanTypePref, preferredTenorMonths: tenorMonths,
-          nominalRate, stressRate,
-        },
-        incomeFields: engineIncomeFields,
-        liabilityFields: engineLiabilityFields,
-        coBorrowers: engineCoBorrowers,
-        bankResults,
-        stage2ByBank,
-        finalEligibleBankIds,
-        productsByBank,
-        qualNotes,
-        effectiveTenor,
-      });
-
-      toast.success('Qualification saved!');
-      navigate(`/qualify/${appId}`);
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to save');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // Lightweight save for notes — saves the case silently and returns the applicantId
-  async function handleSaveForNotes(): Promise<string | undefined> {
-    if (!user) return undefined;
-    // If already saved, just return the existing id
-    if (editApplicantId) return editApplicantId;
-    try {
-      const resolvedSegment = segment || deriveSegment(residency || 'resident_expat', empType);
-      const appId = await saveQualificationSnapshot({
-        userId: user.id,
-        editApplicantId,
-        applicant: {
-          fullName: clientName || 'New Client',
-          residencyStatus: residency || 'resident_expat',
-          nationality: nationality || '',
-          dateOfBirth: dob || null,
-          employmentType: empType,
-          segment: resolvedSegment,
-        },
-        property: {
-          propertyValue, loanAmount, ltv, emirate, isDIFC, isAlAin,
-          transactionType: txnType, salaryTransfer: salaryTransfer === 'stl', propertyType, purpose,
-          loanTypePreference: loanTypePref, preferredTenorMonths: tenorMonths,
-          nominalRate, stressRate,
-        },
-        incomeFields: engineIncomeFields,
-        liabilityFields: engineLiabilityFields,
-        coBorrowers: engineCoBorrowers,
-        bankResults,
-        stage2ByBank,
-        finalEligibleBankIds,
-        productsByBank,
-        qualNotes,
-        effectiveTenor,
-      });
-      // Update URL silently without navigation
-      window.history.replaceState(null, '', `/qualify/${appId}`);
-      return appId;
-    } catch {
-      return undefined;
-    }
-  }
-
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
@@ -684,7 +671,19 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
           <Button variant="ghost" size="sm" className="text-primary-foreground hover:bg-primary/80" onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h1 className="text-lg font-semibold">{editApplicantId ? 'Edit Qualification' : 'New Qualification'}</h1>
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="text-lg font-semibold shrink-0">
+              {currentAppIdRef.current ? 'Qualification' : 'New Qualification'}
+            </h1>
+            {clientName && (
+              <span className="text-base font-medium text-primary-foreground/80 truncate">— {clientName}</span>
+            )}
+            {lastSaved && (
+              <span className="text-[11px] text-primary-foreground/50 shrink-0">
+                ✓ Saved {format(lastSaved, 'HH:mm')}
+              </span>
+            )}
+          </div>
         </div>
       </header>
       <GlobalTickerBar />
@@ -695,18 +694,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         {/* COLUMN 1 — Smart form (26%) */}
         <div className="w-[26%] bg-background overflow-y-auto border-r flex flex-col">
           <div className="p-4 space-y-3 flex-1">
-
-            {/* Client name + save row */}
-            <div className="flex gap-2 items-end">
-              <div className="flex-1">
-                <Label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">Client Name</Label>
-                <Input className="mt-1 h-8 text-xs" placeholder="Enter client name…" value={clientName} onChange={e => setClientName(e.target.value)} />
-              </div>
-              <Button onClick={handleSave} disabled={saving || !segment} size="sm" className="h-8 px-3 text-xs bg-accent text-accent-foreground hover:bg-accent/90 shrink-0">
-                <Save className="h-3.5 w-3.5 mr-1" />
-                {saving ? 'Saving…' : 'Save'}
-              </Button>
-            </div>
 
             {/* Segment selector */}
             <SegmentSelector
@@ -729,13 +716,13 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
             {segment && (
               <div className="space-y-3">
 
-                {/* ── PERSONAL — condensed ── */}
+                {/* ── PERSONAL ── */}
                 <div className="space-y-2">
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide border-b pb-1">Personal</p>
                   <div className="grid grid-cols-2 gap-2">
                     {segment !== 'non_resident' && (
                       <div className="col-span-2">
-                        <Label className="text-[10px] text-muted-foreground">Residency <span className="text-destructive">*</span></Label>
+                        <Label className="text-[10px] text-muted-foreground">Residency</Label>
                         <Select value={residency} onValueChange={setResidency}>
                           <SelectTrigger className="mt-0.5 h-7 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
                           <SelectContent>
@@ -746,7 +733,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
                       </div>
                     )}
                     <div className="col-span-2">
-                      <Label className="text-[10px] text-muted-foreground">Nationality <span className="text-destructive">*</span></Label>
+                      <Label className="text-[10px] text-muted-foreground">Nationality</Label>
                       <Select value={nationality} onValueChange={setNationality}>
                         <SelectTrigger className="mt-0.5 h-7 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
                         <SelectContent className="max-h-60">
@@ -788,10 +775,8 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
                     </div>
                   </div>
 
-                  {/* Segment-specific sections */}
                   {segment === 'self_employed' && <SelfEmployedSection info={seInfo} onChange={setSeInfo} />}
 
-                  {/* Live qualification readiness card */}
                   {segment && (
                     <QualificationReadinessCard
                       segment={segment}
@@ -818,7 +803,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
                   )}
                 </div>
 
-                {/* ── PROPERTY — condensed ── */}
+                {/* ── PROPERTY & LOAN ── */}
                 <div className="space-y-2">
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide border-b pb-1">Property & Loan</p>
                   <div className="grid grid-cols-2 gap-2">
@@ -986,7 +971,12 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         <div className="w-[30%] bg-background flex flex-col min-h-0">
           <NotesPanel
             embedded
-            applicantId={editApplicantId}
+            applicantId={currentAppIdRef.current || editApplicantId}
+            clientName={clientName}
+            onClientNameChange={setClientName}
+            onSave={() => performSave(false)}
+            isSaving={isSaving}
+            lastSaved={lastSaved}
             onExtract={handleExtract}
             onRequestSave={handleSaveForNotes}
             whatIfContext={{
