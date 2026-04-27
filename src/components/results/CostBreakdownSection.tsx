@@ -1,7 +1,4 @@
 import { useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/mortgage-utils';
 import { cn } from '@/lib/utils';
 import type { CaseBankResult } from '@/lib/case/stage1-engine';
@@ -64,33 +61,23 @@ function calcEMI(loan: number, annualRate: number, months: number): number {
 }
 
 const RANK_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
-const RANK_COLORS = [
-  'bg-yellow-500 text-yellow-950',
-  'bg-zinc-300 text-zinc-800',
-  'bg-amber-700 text-amber-50',
-];
 
 export default function CostBreakdownSection({ bankResults, loanAmount, propertyValue, nominalRate, tenorMonths, emirate, productsByBank }: Props) {
   const approvedBanks = useMemo(() => bankResults.filter(r => r.eligible), [bankResults]);
 
   const costs = useMemo((): BankCosts[] => {
     if (approvedBanks.length === 0 || !loanAmount) return [];
-
+    const isDubai = emirate === 'dubai';
     const isDubaiAbuSharjah = ['dubai', 'abu_dhabi', 'sharjah'].includes(emirate);
     const defaultValFee = isDubaiAbuSharjah ? 2500 : 3000;
-    const isDubai = emirate === 'dubai';
 
     const unsorted = approvedBanks.map(r => {
       const product = productsByBank[r.bank.id];
-
-      // Rate: product rate if available, else manual fallback
       const rawRate = product?.rate ?? null;
       const usedRate = rawRate !== null ? rawRate : nominalRate / 100;
       const displayRatePercent = usedRate * 100;
       const rateSource: 'product' | 'manual' = product?.rate != null ? 'product' : 'manual';
-      const rateLabel = product?.rate_label ?? `Rate: ${displayRatePercent.toFixed(2)}% (manual)`;
-
-      // Defaults with product overrides
+      const rateLabel = product?.rate_label ?? `${displayRatePercent.toFixed(2)}% (manual)`;
       const lifeInsRate = product?.life_ins_monthly_percent ?? 0.00018;
       const propInsRate = product?.prop_ins_annual_percent ?? 0.00035;
       const rawProcFee = product?.processing_fee_percent;
@@ -102,22 +89,19 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
       const lifeInsMonth = Math.round(loanAmount * lifeInsRate);
       const propInsMonth = Math.round((propertyValue * propInsRate) / 12);
       const totalMonthly = emi + lifeInsMonth + propInsMonth;
-
       const fixedPeriodTotal = totalMonthly * fixedMonths;
-
       const downPayment = Math.max(0, propertyValue - loanAmount);
       const dldFee = isDubai ? Math.round(propertyValue * 0.04 + 580) : 0;
       const mortgageReg = Math.round(loanAmount * 0.0025 + 290);
       const transferCentre = 4200;
       const processingFeeAED = Math.round(loanAmount * processingFeePercent / 100);
-
-      const totalUpfront = downPayment + dldFee + mortgageReg + transferCentre + processingFeeAED + valFee;
       const upfrontExclDown = dldFee + mortgageReg + transferCentre + processingFeeAED + valFee;
+      const totalUpfront = downPayment + upfrontExclDown;
       const grandTotal = fixedPeriodTotal + upfrontExclDown;
 
       return {
-        bank: r, usedRate, displayRatePercent, rateLabel, rateSource, emi, lifeInsMonth, propInsMonth, totalMonthly,
-        fixedMonths, fixedPeriodTotal, rank: 0,
+        bank: r, usedRate, displayRatePercent, rateLabel, rateSource, emi,
+        lifeInsMonth, propInsMonth, totalMonthly, fixedMonths, fixedPeriodTotal, rank: 0,
         downPayment, dldFee, mortgageReg, transferCentre,
         processingFeePercent, processingFeeAED, valuationFee: valFee,
         totalUpfront, grandTotal,
@@ -131,109 +115,112 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
 
   if (costs.length === 0) return null;
 
-  type Row = {
-    label: string;
-    getValue: (c: BankCosts) => string;
-    getSubLabel?: (c: BankCosts) => string | null;
-    bold?: boolean;
-  };
-
-  const monthlyRows: Row[] = [
-    {
-      label: 'Monthly EMI',
-      getValue: c => `AED ${formatCurrency(c.emi)}`,
-      getSubLabel: c => `at ${c.displayRatePercent.toFixed(2)}% — ${c.rateSource === 'product' ? 'Rate from product' : 'Rate from manual input'}`,
-    },
-    { label: 'Life Insurance', getValue: c => `AED ${formatCurrency(c.lifeInsMonth)}` },
-    { label: 'Property Insurance', getValue: c => `AED ${formatCurrency(c.propInsMonth)}` },
-    { label: 'Total Monthly Payment', getValue: c => `AED ${formatCurrency(c.totalMonthly)}`, bold: true },
-  ];
-
-  const fixedRows: Row[] = [
-    { label: `${costs[0]?.fixedMonths ?? 24}-Month Total Cost`, getValue: c => `AED ${formatCurrency(c.fixedPeriodTotal)}`, bold: true },
-  ];
-
-  const upfrontRows: Row[] = [
-    { label: 'Down Payment', getValue: c => `AED ${formatCurrency(c.downPayment)}` },
-    { label: 'DLD Fee (4% + AED 580)', getValue: c => c.dldFee ? `AED ${formatCurrency(c.dldFee)}` : 'N/A' },
-    { label: 'Mortgage Registration', getValue: c => `AED ${formatCurrency(c.mortgageReg)}` },
-    { label: 'Transfer Centre Fee', getValue: c => `AED ${formatCurrency(c.transferCentre)}` },
-    { label: 'Bank Processing Fee', getValue: c => `${c.processingFeePercent}% — AED ${formatCurrency(c.processingFeeAED)}` },
-    { label: 'Property Valuation', getValue: c => `AED ${formatCurrency(c.valuationFee)}` },
-    { label: 'Total Upfront', getValue: c => `AED ${formatCurrency(c.totalUpfront)}`, bold: true },
-  ];
-
-  const grandRows: Row[] = [
-    { label: 'Total Cost of Ownership (Fixed Period)', getValue: c => `AED ${formatCurrency(c.grandTotal)}`, bold: true },
-  ];
-
-  const sections: { title: string; rows: Row[]; extra?: 'rank' }[] = [
-    { title: 'Monthly Costs', rows: monthlyRows },
-    { title: 'Fixed Period Total', rows: fixedRows, extra: 'rank' },
-    { title: 'Upfront Costs (One-Time)', rows: upfrontRows },
-    { title: 'Grand Total', rows: grandRows },
-  ];
+  const fixedMonths = costs[0]?.fixedMonths ?? 24;
 
   return (
-    <Card className="bg-background">
-      <CardHeader className="py-3 px-4">
-        <CardTitle className="text-sm font-semibold text-primary">Cost Comparison — Approved Banks</CardTitle>
-      </CardHeader>
-      <CardContent className="p-0 overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-xs min-w-[200px] sticky left-0 bg-background z-10"> </TableHead>
+    <div className="surface overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-border">
+        <div className="form-section-title mb-0">
+          <span>Cost Comparison · Approved Banks</span>
+        </div>
+      </div>
+
+      {/* Bank columns header */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-[hsl(220,18%,97%)]">
+              <th className="text-left px-4 py-2.5 section-label min-w-[160px]"> </th>
               {costs.map(c => (
-                <TableHead key={c.bank.bank.id} className="text-xs text-center min-w-[160px]">
-                  <div className="font-semibold">{c.bank.bank.bankName}</div>
-                  <div className="text-[9px] text-muted-foreground font-normal mt-0.5">{c.rateLabel}</div>
-                </TableHead>
+                <th key={c.bank.bank.id} className="text-center px-4 py-2.5 min-w-[140px]">
+                  <p className="text-[13px] font-semibold text-foreground">{c.bank.bank.bankName}</p>
+                  <p className="text-[10px] text-muted-foreground font-normal mt-0.5 font-mono">{c.rateLabel}</p>
+                  {/* Rank badge */}
+                  <div className="flex justify-center mt-1.5">
+                    <span className={cn(
+                      'text-[10px] font-bold px-2 py-0.5 rounded-full',
+                      c.rank === 0 ? 'bg-[hsl(174,85%,32%)] text-white' :
+                      c.rank === 1 ? 'bg-[hsl(216,75%,12%)] text-white' :
+                      c.rank === 2 ? 'bg-amber-600 text-white' :
+                      'bg-border text-muted-foreground'
+                    )}>
+                      {RANK_LABELS[c.rank] ?? `${c.rank + 1}th`}
+                    </span>
+                  </div>
+                </th>
               ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sections.map(section => (
-              <>
-                <TableRow key={`h-${section.title}`} className="bg-muted/50">
-                  <TableCell colSpan={costs.length + 1} className="py-1.5 text-xs font-bold text-primary uppercase tracking-wide">
-                    {section.title}
-                  </TableCell>
-                </TableRow>
-                {section.rows.map(row => (
-                  <TableRow key={row.label} className={row.bold ? 'border-t' : ''}>
-                    <TableCell className={cn('text-xs sticky left-0 bg-background py-1.5', row.bold && 'font-bold')}>
-                      {row.label}
-                    </TableCell>
-                    {costs.map(c => (
-                      <TableCell key={c.bank.bank.id} className={cn('text-xs text-center py-1.5', row.bold && 'font-bold')}>
-                        <div>{row.getValue(c)}</div>
-                        {row.getSubLabel && (
-                          <div className="text-[10px] text-muted-foreground mt-0.5">
-                            {row.getSubLabel(c)}
-                          </div>
-                        )}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-                {section.extra === 'rank' && (
-                  <TableRow key="rank-row">
-                    <TableCell className="text-xs sticky left-0 bg-background py-1.5 font-semibold">Rank</TableCell>
-                    {costs.map(c => (
-                      <TableCell key={c.bank.bank.id} className="text-center py-1.5">
-                        <Badge className={cn('text-[10px] px-2 py-0.5', RANK_COLORS[c.rank] ?? 'bg-muted text-muted-foreground')}>
-                          {RANK_LABELS[c.rank] ?? `${c.rank + 1}th`}
-                        </Badge>
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                )}
-              </>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+            </tr>
+          </thead>
+          <tbody>
+            {/* Monthly section */}
+            <SectionHeader label="Monthly Costs" colCount={costs.length} />
+            <Row label="EMI" costs={costs} getValue={c => formatCurrency(c.emi)}
+              getSub={c => `at ${c.displayRatePercent.toFixed(2)}%`} />
+            <Row label="Life Insurance" costs={costs} getValue={c => formatCurrency(c.lifeInsMonth)} />
+            <Row label="Property Insurance" costs={costs} getValue={c => formatCurrency(c.propInsMonth)} />
+            <Row label="Total Monthly" costs={costs} getValue={c => formatCurrency(c.totalMonthly)} bold />
+
+            {/* Fixed period */}
+            <SectionHeader label={`${fixedMonths}-Month Total`} colCount={costs.length} />
+            <Row label={`${fixedMonths}-Month Cost`} costs={costs} getValue={c => formatCurrency(c.fixedPeriodTotal)} bold highlight />
+
+            {/* Upfront */}
+            <SectionHeader label="One-Time Upfront" colCount={costs.length} />
+            <Row label="Down Payment" costs={costs} getValue={c => formatCurrency(c.downPayment)} />
+            <Row label="DLD Fee" costs={costs} getValue={c => c.dldFee ? formatCurrency(c.dldFee) : 'N/A'} />
+            <Row label="Mortgage Registration" costs={costs} getValue={c => formatCurrency(c.mortgageReg)} />
+            <Row label="Transfer Centre" costs={costs} getValue={c => formatCurrency(c.transferCentre)} />
+            <Row label="Processing Fee" costs={costs}
+              getValue={c => formatCurrency(c.processingFeeAED)}
+              getSub={c => `${c.processingFeePercent}%`} />
+            <Row label="Valuation" costs={costs} getValue={c => formatCurrency(c.valuationFee)} />
+            <Row label="Total Upfront" costs={costs} getValue={c => formatCurrency(c.totalUpfront)} bold />
+
+            {/* Grand total */}
+            <SectionHeader label="Total Cost of Ownership" colCount={costs.length} />
+            <Row label={`Fixed Period + Upfront`} costs={costs} getValue={c => formatCurrency(c.grandTotal)} bold highlight />
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({ label, colCount }: { label: string; colCount: number }) {
+  return (
+    <tr className="bg-[hsl(220,18%,97%)] border-t border-border">
+      <td colSpan={colCount + 1} className="px-4 py-2">
+        <span className="section-label">{label}</span>
+      </td>
+    </tr>
+  );
+}
+
+function Row({ label, costs, getValue, getSub, bold, highlight }: {
+  label: string;
+  costs: BankCosts[];
+  getValue: (c: BankCosts) => string;
+  getSub?: (c: BankCosts) => string;
+  bold?: boolean;
+  highlight?: boolean;
+}) {
+  return (
+    <tr className={cn('border-t border-border/50', highlight && 'bg-[hsl(174,85%,32%,0.03)]')}>
+      <td className={cn('px-4 py-2.5 text-[12.5px] text-muted-foreground', bold && 'font-semibold text-foreground')}>
+        {label}
+      </td>
+      {costs.map(c => (
+        <td key={c.bank.bank.id} className="px-4 py-2.5 text-center">
+          <p className={cn('text-[12.5px] font-mono', bold ? 'font-semibold text-foreground' : 'text-foreground',
+            highlight && 'text-[hsl(216,75%,12%)]')}>
+            AED {getValue(c)}
+          </p>
+          {getSub && (
+            <p className="text-[10px] text-muted-foreground mt-0.5">{getSub(c)}</p>
+          )}
+        </td>
+      ))}
+    </tr>
   );
 }
