@@ -27,7 +27,7 @@ import DebugPanel from '@/components/qualify/DebugPanel';
 import SegmentSelector from '@/components/qualify/SegmentSelector';
 import NotesPanel, { type ExtractionResult, type WhatIfContext } from '@/components/qualify/NotesPanel';
 import SelfEmployedSection from '@/components/qualify/SelfEmployedSection';
-import QualificationReadinessCard from '@/components/qualify/QualificationReadinessCard';
+
 import NonResidentSection from '@/components/qualify/NonResidentSection';
 import {
   COUNTRIES, INCOME_TYPES, LIABILITY_TYPES, TRANSACTION_TYPES, PROPERTY_TYPES,
@@ -777,27 +777,6 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
                   {segment === 'self_employed' && <SelfEmployedSection info={seInfo} onChange={setSeInfo} />}
 
-                  {segment && (
-                    <QualificationReadinessCard
-                      segment={segment}
-                      income={totalIncome}
-                      liabilities={totalLiabilities}
-                      loanAmount={loanAmount}
-                      tenorMonths={tenorMonths}
-                      dob={dob}
-                      empType={empType}
-                      lobMonths={seInfo.lengthOfBusinessMonths}
-                      ownershipPct={seInfo.ownershipSharePercent}
-                      incomeRoute={seInfo.incomeRoute}
-                      nationality={nationality}
-                      residency={residency}
-                      emirate={emirate}
-                      txnType={txnType}
-                      salaryTransfer={salaryTransfer}
-                      propertyType={propertyType}
-                      purpose={purpose}
-                    />
-                  )}
                   {segment === 'non_resident' && (
                     <NonResidentSection info={nrInfo} onChange={(info) => { setNrInfo(info); setEmpType(info.employmentTypeNR || 'salaried'); }} />
                   )}
