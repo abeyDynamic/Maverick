@@ -391,7 +391,12 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   }, [resolvedSegment, empType, seInfo.docType, nrInfo.dabRequired, salaryTransfer]);
 
   useEffect(() => {
-    if (routeSupport.length === 0) {
+    // Only apply route filtering once the user has actually selected residency
+    // and employment type. Otherwise the default qualProfile (resident_salaried
+    // / salary_transfer) can wipe out all banks for users still filling the form,
+    // making results appear and then vanish.
+    const profileReady = !!residency && !!empType;
+    if (routeSupport.length === 0 || !profileReady) {
       setBanks(allBanks);
       setRouteExclusions({});
       return;
@@ -407,9 +412,16 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
       }
       return true;
     });
+    // Safety fallback: if everything got filtered out, keep all banks visible
+    // so the user still sees results — exclusions are surfaced in the table.
+    if (filtered.length === 0) {
+      setBanks(allBanks);
+      setRouteExclusions(exclusions);
+      return;
+    }
     setBanks(filtered);
     setRouteExclusions(exclusions);
-  }, [allBanks, routeSupport, qualProfile.segmentPath, qualProfile.routeType]);
+  }, [allBanks, routeSupport, qualProfile.segmentPath, qualProfile.routeType, residency, empType]);
 
   const stage2ByBank = useMemo(
     () => evaluateStage2ForBanks(bankResults, policyTerms, {
