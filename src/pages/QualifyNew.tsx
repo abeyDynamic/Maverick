@@ -193,8 +193,8 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     currentAppIdRef.current = editApplicantId;
     async function loadApplicant() {
       const [appRes, propRes, incRes, liabRes, cbRes] = await Promise.all([
-        supabase.from('applicants').select('*').eq('id', editApplicantId).single(),
-        supabase.from('property_details').select('*').eq('applicant_id', editApplicantId).single(),
+        supabase.from('applicants').select('*').eq('id', editApplicantId).maybeSingle(),
+        supabase.from('property_details').select('*').eq('applicant_id', editApplicantId).maybeSingle(),
         supabase.from('income_fields').select('*').eq('applicant_id', editApplicantId),
         supabase.from('liability_fields').select('*').eq('applicant_id', editApplicantId),
         supabase.from('co_borrowers').select('*').eq('applicant_id', editApplicantId).order('index' as any),

@@ -73,9 +73,9 @@ export default function QualifyEdit() {
     async function load() {
       setLoading(true);
       const [appRes, propRes, qrRes] = await Promise.all([
-        supabase.from('applicants').select('id, full_name').eq('id', id).single(),
-        supabase.from('property_details').select('property_value, loan_amount, ltv, emirate, preferred_tenor_months').eq('applicant_id', id).single(),
-        supabase.from('qualification_results').select('saved_at, loan_amount, dbr_percent, bank_results, cost_comparison').eq('applicant_id', id).order('saved_at', { ascending: false }).limit(1).single() as any,
+        supabase.from('applicants').select('id, full_name').eq('id', id).maybeSingle(),
+        supabase.from('property_details').select('property_value, loan_amount, ltv, emirate, preferred_tenor_months').eq('applicant_id', id).maybeSingle(),
+        supabase.from('qualification_results').select('saved_at, loan_amount, dbr_percent, bank_results, cost_comparison').eq('applicant_id', id).order('saved_at', { ascending: false }).limit(1).maybeSingle() as any,
       ]);
 
       const app = appRes.data as any;
