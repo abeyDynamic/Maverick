@@ -19,19 +19,46 @@ export function runStage1(
   if (banks.length === 0 || !loanAmount) return [];
 
   return banks.map(bank => {
-    const stressRate = (bank.baseStressRate ?? fallbackStressRate / 100) * 100;
-    const stressEMI = calculateStressEMI(loanAmount, stressRate, tenorMonths);
+    // Convention: bank.baseStressRate, bank.dbrLimit, and fallbackStressRate
+    // are all stored as DISPLAY PERCENTS (e.g. 7.37 means 7.37%, 50 means 50%).
+    // calculateStressEMI also expects a display percent. Do NOT scale here.
+    const stressRate = bank.baseStressRate ?? fallbackStressRate;
+
+    // B17: clamp tenor by the bank's own maximum (don't lengthen beyond
+    // applicant cap, don't lengthen beyond bank cap).
+    const effectiveBankTenor = bank.maxTenorMonths != null
+      ? Math.min(tenorMonths, bank.maxTenorMonths)
+      : tenorMonths;
+
+    const stressEMI = calculateStressEMI(loanAmount, stressRate, effectiveBankTenor);
     const dbr = totalIncome > 0 ? ((stressEMI + totalLiabilities) / totalIncome) * 100 : 0;
-    const dbrLimit = Math.round(bank.dbrLimit * 10000) / 100;
+    const dbrLimit = bank.dbrLimit;
     const minSalaryMet = totalIncome >= bank.minSalary;
     const dbrMet = dbr <= dbrLimit;
-    const eligible = dbrMet && minSalaryMet;
 
-    return { bank, stressRate, stressEMI, dbr, dbrLimit, minSalaryMet, dbrMet, eligible };
+    // B18: hard loan-range check at Stage 1. A bank cannot be eligible if the
+    // requested loan amount sits outside its [minLoanAmount, maxLoanAmount] window.
+    const minOk = bank.minLoanAmount == null || loanAmount >= bank.minLoanAmount;
+    const maxOk = bank.maxLoanAmount == null || loanAmount <= bank.maxLoanAmount;
+    const loanInRange = minOk && maxOk;
+
+    const eligible = dbrMet && minSalaryMet && loanInRange;
+
+    return {
+      bank, stressRate, stressEMI, dbr, dbrLimit,
+      minSalaryMet, dbrMet, loanInRange, eligible,
+      effectiveTenor: effectiveBankTenor,
+    };
   }).sort((a, b) => {
     if (a.eligible && !b.eligible) return -1;
     if (!a.eligible && b.eligible) return 1;
-    if (a.eligible && b.eligible) return a.stressEMI - b.stressEMI;
+    // Among eligible banks, prefer the one with the most DBR headroom
+    // (lower dbr/dbrLimit ratio means more cushion for the client).
+    if (a.eligible && b.eligible) {
+      const aHead = a.dbrLimit - a.dbr;
+      const bHead = b.dbrLimit - b.dbr;
+      return bHead - aHead;
+    }
     return (a.dbr - a.dbrLimit) - (b.dbr - b.dbrLimit);
   });
 }
