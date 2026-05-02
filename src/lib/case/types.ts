@@ -112,8 +112,8 @@ export interface CaseBank {
   baseStressRate: number | null;
   minSalary: number;
   dbrLimit: number;
-  maxTenorMonths: number;
-  minLoanAmount: number;
+  maxTenorMonths: number | null;
+  minLoanAmount: number | null;
   maxLoanAmount: number | null;
 }
 
@@ -125,7 +125,9 @@ export interface CaseBankResult {
   dbrLimit: number;
   minSalaryMet: boolean;
   dbrMet: boolean;
-  eligible: boolean;             // Stage 1 eligible
+  loanInRange: boolean;          // B18: loan inside bank's [min, max] window
+  effectiveTenor: number;        // B17: tenor actually used for this bank's EMI (clamped by maxTenorMonths)
+  eligible: boolean;             // Stage 1 eligible (DBR + min salary + loan range)
 }
 
 export interface QualificationCase {
