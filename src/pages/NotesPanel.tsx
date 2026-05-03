@@ -279,6 +279,13 @@ function ruleBasedExtract(notes: string): ExtractionResult {
   if (result.property_value && result.ltv && !result.loan_amount) result.loan_amount = Math.round(result.property_value * result.ltv / 100);
   if (result.property_value && result.loan_amount && !result.ltv) result.ltv = Math.round((result.loan_amount / result.property_value) * 100);
 
+  // Tenor
+  const tenorM = notes.match(/tenor\s*(?:of|:)?\s*(\d{1,2})\s*(years?|yrs?)/i) || notes.match(/(\d{1,2})\s*(?:years?|yrs?)\s+tenor/i);
+  if (tenorM) { const yrs = parseInt(tenorM[1]); if (yrs > 0 && yrs <= 30) result.tenor_months = yrs * 12; }
+  const tenorMo = notes.match(/tenor\s*(?:of|:)?\s*(\d{2,3})\s*months?/i);
+  if (!result.tenor_months && tenorMo) { const mo = parseInt(tenorMo[1]); if (mo >= 12 && mo <= 360) result.tenor_months = mo; }
+
+
   // Transaction type — be conservative. "handover" only if explicit handover language.
   if (text.includes('off-plan') || text.includes('off plan')) result.transaction_type = 'off_plan';
   else if (text.includes('buyout') || text.includes('buy out') || text.includes('re-mortgage') || text.includes('remortgage')) result.transaction_type = 'buyout';
