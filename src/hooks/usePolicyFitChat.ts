@@ -29,33 +29,39 @@ export function usePolicyFitChat({ caseFacts, availableBanks = [] }: UsePolicyFi
       try {
         const parsed = parsePolicyFitIntent(message, availableBanks);
 
-        // Fetch policy_search_view (paged to overcome 1000 row default cap)
-        const PAGE = 1000;
-        let from = 0;
-        const all: PolicySearchRow[] = [];
-        // base query — filter server-side by segment + employment + bank when possible
-        const segNorm = normalizePolicySegment(caseFacts.segment);
-        const empNorm = normalizePolicyEmployment(caseFacts.employmentType);
+        const segment = normalizePolicySegment(caseFacts.segment);
+        const employmentType = normalizePolicyEmployment(caseFacts.employmentType);
 
-        // Use 'in' filter for selected banks; otherwise no bank filter
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          let q = (supabase as any).from('policy_search_view').select('*').range(from, from + PAGE - 1);
-          if (segNorm) q = q.or(`segment.ilike.%${segNorm}%,segment.is.null`);
-          if (empNorm) q = q.or(`employment_type.ilike.%${empNorm}%,employment_type.is.null`);
-          if (parsed.selectedBanks.length > 0) {
-            q = q.in('bank', parsed.selectedBanks);
-          }
-          const { data, error: qErr } = await q;
-          if (qErr) throw qErr;
-          const batch = (data ?? []) as PolicySearchRow[];
-          all.push(...batch);
-          if (batch.length < PAGE) break;
-          from += PAGE;
+        let query = (supabase as any)
+          .from('policy_search_view')
+          .select('*')
+          .in('policy_category', [
+            'eligibility',
+            'income_liability',
+            'transaction',
+            'property',
+            'document',
+            'tat_validity',
+            'fee',
+            'note',
+          ])
+          .limit(1000);
+
+        if (parsed.selectedBanks.length > 0) {
+          query = query.in('bank', parsed.selectedBanks);
+        }
+        if (segment) {
+          query = query.eq('segment', segment);
+        }
+        if (employmentType) {
+          query = query.or(
+            `employment_type.eq.${employmentType},employment_type.eq.Mixed,employment_type.is.null`
+          );
         }
 
-        // Filter to relevant categories client-side
-        const filtered = all.filter(r => !r.policy_category || RELEVANT_CATEGORIES.has(String(r.policy_category).toLowerCase()));
+        const { data, error: qErr } = await query;
+        if (qErr) throw qErr;
+        const filtered = (data ?? []) as PolicySearchRow[];
 
         const report = buildPolicyFitReport({
           caseFacts,
