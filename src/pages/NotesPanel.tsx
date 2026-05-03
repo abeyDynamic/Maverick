@@ -365,6 +365,52 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     }
   }
 
+  // Self-employed details
+  if (result.employment_type === 'self_employed' || /self[\s-]?employed|business owner|owns (a|the) company/i.test(notes)) {
+    const se: NonNullable<ExtractionResult['self_employed']> = {
+      business_name: null,
+      length_of_business_months: null,
+      ownership_share_percent: null,
+      income_route: null,
+      doc_type: null,
+    };
+    const bn = notes.match(/(?:business|company|firm|trading\s+as)\s*(?:name)?\s*[:=-]?\s*([A-Z][A-Za-z0-9&'.\- ]{2,60}?)(?:\s+(?:LLC|FZE|FZ-?LLC|FZ\s+LLC|DMCC|Ltd|LLP|Inc))?/);
+    if (bn?.[1]) se.business_name = bn[1].trim().replace(/\s+/g, ' ');
+    const lobM = notes.match(/(?:lob|length\s+of\s+business|business\s+(?:since|running|established|operating)\s+for)\s*[:=-]?\s*(\d{1,3})\s*(years?|yrs?|months?|mos?)/i)
+      || notes.match(/(\d{1,3})\s*(years?|yrs?|months?|mos?)\s+(?:in\s+business|of\s+business|of\s+trading|trading)/i);
+    if (lobM) {
+      const n = parseInt(lobM[1]);
+      const unit = lobM[2].toLowerCase();
+      se.length_of_business_months = unit.startsWith('year') || unit.startsWith('yr') ? n * 12 : n;
+    }
+    const ownM = notes.match(/(\d{1,3})\s*%\s*(?:ownership|shareholding|share|stake|owner)/i)
+      || notes.match(/(?:ownership|shareholding|share|stake)\s*(?:of|is|:)?\s*(\d{1,3})\s*%/i);
+    if (ownM) {
+      const pct = parseInt(ownM[1]);
+      if (pct > 0 && pct <= 100) se.ownership_share_percent = pct;
+    }
+    if (/sole\s+(?:owner|proprietor)|100\s*%\s*owner/i.test(notes) && !se.ownership_share_percent) se.ownership_share_percent = 100;
+
+    // Income route inference
+    if (/audited\s+(?:revenue|financial|account)/i.test(notes)) { se.income_route = 'audited_revenue'; se.doc_type = 'full_doc'; }
+    else if (/vat\s+(?:return|revenue|filing)/i.test(notes)) { se.income_route = 'vat_revenue'; se.doc_type = 'full_doc'; }
+    else if (/\bcto\b|company\s+turnover/i.test(notes)) { se.income_route = 'full_doc_cto'; se.doc_type = 'full_doc'; }
+    else if (/company\s+(?:dab|daily\s+average\s+balance)/i.test(notes)) { se.income_route = 'low_doc_company_dab'; se.doc_type = 'low_doc'; }
+    else if (/company\s+(?:mcto|monthly\s+credit\s+turnover)/i.test(notes)) { se.income_route = 'low_doc_company_mcto'; se.doc_type = 'low_doc'; }
+    else if (/(?:personal\s+)?(?:dab|daily\s+average\s+balance)/i.test(notes)) { se.income_route = 'low_doc_personal_dab'; se.doc_type = 'low_doc'; }
+    else if (/(?:personal\s+)?(?:mcto|monthly\s+credit\s+turnover)/i.test(notes)) { se.income_route = 'low_doc_personal_mcto'; se.doc_type = 'low_doc'; }
+
+    // Mirror LOB to tier2 for compatibility
+    if (se.length_of_business_months && !result.tier2.length_of_business_months) {
+      result.tier2.length_of_business_months = se.length_of_business_months;
+    }
+
+    if (se.business_name || se.length_of_business_months || se.ownership_share_percent || se.income_route) {
+      result.self_employed = se;
+      result.confidence.personal = Math.min(result.confidence.personal + 0.2, 1);
+    }
+  }
+
   result.confidence.personal = Math.min(result.confidence.personal, 1);
   result.confidence.property = Math.min(result.confidence.property, 1);
   return result;
