@@ -128,8 +128,15 @@ function ruleBasedExtract(notes: string): ExtractionResult {
   const result: ExtractionResult = {
     client_name: null, segment: null, residency: null, nationality: null,
     dob: null, employment_type: null, property_value: null, loan_amount: null,
-    ltv: null, emirate: null, transaction_type: null, property_type: null,
+    ltv: null, tenor_months: null, emirate: null, transaction_type: null, property_type: null,
     purpose: null, salary_transfer: null, income_fields: [], liability_fields: [],
+    tier2: {
+      length_of_service_months: null, length_of_business_months: null, aecb_score: null,
+      salary_credits_count: null, probation_confirmed: null, employer_category: null,
+      visa_status: null, country_of_income: null, foreign_bureau_available: null,
+      foreign_bureau_score: null, currency: null,
+    },
+    contact: { phone: null, email: null, alternate_phone: null, address: null },
     confidence: { personal: 0, property: 0, income: 0, liabilities: 0 }, unclear: [],
   };
 
