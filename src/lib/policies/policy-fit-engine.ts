@@ -93,10 +93,11 @@ export function buildPolicyFitReport(params: {
   }
 
   // Filter rows
-  let rows = policyRows;
-  if (selectedBanks && selectedBanks.length > 0) {
-    const set = new Set(selectedBanks.map(b => b.toLowerCase()));
-    rows = rows.filter(r => r.bank && set.has(r.bank.toLowerCase()));
+  let rows = Array.isArray(policyRows) ? policyRows : [];
+  const safeSelected = Array.isArray(selectedBanks) ? selectedBanks : [];
+  if (safeSelected.length > 0) {
+    const set = new Set(safeSelected.map(b => lc(b as any)));
+    rows = rows.filter(r => r?.bank && set.has(lc(r.bank as any)));
   }
 
   // Group by bank+variant
