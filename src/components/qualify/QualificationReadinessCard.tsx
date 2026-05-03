@@ -1,226 +1,201 @@
-import { useMemo } from 'react';
-import { formatCurrency } from '@/lib/mortgage-utils';
-import { cn } from '@/lib/utils';
-import type { CaseBankResult } from '@/lib/case/stage1-engine';
+import { CheckCircle2, AlertCircle, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState } from 'react';
 
-export interface ProductData {
-  bank_id: string;
-  rate: number | null;
-  fixed_period_months: number | null;
-  processing_fee_percent: number | null;
-  valuation_fee: number | null;
-  life_ins_monthly_percent: number | null;
-  prop_ins_annual_percent: number | null;
-  follow_on_margin: number | null;
-  eibor_benchmark: number | string | null;
-  salary_transfer: boolean;
-  fixed_period: string | null;
-  comparison_fixed_months?: number | null;
-  rate_label?: string | null;
+interface ReadinessField {
+  label: string;
+  value: string | null | undefined;
+  status: 'confirmed' | 'inferred' | 'missing';
+  hint?: string;
 }
 
 interface Props {
-  bankResults: CaseBankResult[];
+  segment: string;
+  // Tier 1 — DBR
+  income: number;
+  liabilities: number;
   loanAmount: number;
-  propertyValue: number;
-  nominalRate: number;
   tenorMonths: number;
+  dob: Date | null;
+  empType: string;
+  lobMonths?: number | null; // SE only
+  ownershipPct?: number | null; // SE only
+  incomeRoute?: string; // SE only
+  // Tier 2 — Bank policy
+  nationality: string;
+  residency: string;
   emirate: string;
-  productsByBank: Record<string, ProductData>;
+  txnType: string;
+  salaryTransfer: string;
+  propertyType: string;
+  purpose: string;
 }
 
-interface BankCosts {
-  bank: CaseBankResult;
-  usedRate: number;
-  displayRatePercent: number;
-  rateLabel: string;
-  rateSource: 'product' | 'manual';
-  emi: number;
-  lifeInsMonth: number;
-  propInsMonth: number;
-  totalMonthly: number;
-  fixedMonths: number;
-  fixedPeriodTotal: number;
-  rank: number;
-  downPayment: number;
-  dldFee: number;
-  mortgageReg: number;
-  transferCentre: number;
-  processingFeePercent: number;
-  processingFeeAED: number;
-  valuationFee: number;
-  totalUpfront: number;
-  grandTotal: number;
-}
-
-function calcEMI(loan: number, annualRate: number, months: number): number {
-  if (!loan || !annualRate || !months) return 0;
-  const r = annualRate / 12;
-  if (r === 0) return loan / months;
-  return (loan * r * Math.pow(1 + r, months)) / (Math.pow(1 + r, months) - 1);
-}
-
-const RANK_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
-
-export default function CostBreakdownSection({ bankResults, loanAmount, propertyValue, nominalRate, tenorMonths, emirate, productsByBank }: Props) {
-  const approvedBanks = useMemo(() => bankResults.filter(r => r.eligible), [bankResults]);
-
-  const costs = useMemo((): BankCosts[] => {
-    if (approvedBanks.length === 0 || !loanAmount) return [];
-    const isDubai = emirate === 'dubai';
-    const isDubaiAbuSharjah = ['dubai', 'abu_dhabi', 'sharjah'].includes(emirate);
-    const defaultValFee = isDubaiAbuSharjah ? 2500 : 3000;
-
-    const unsorted = approvedBanks.map(r => {
-      const product = productsByBank[r.bank.id];
-      const rawRate = product?.rate ?? null;
-      const usedRate = rawRate !== null ? rawRate : nominalRate / 100;
-      const displayRatePercent = usedRate * 100;
-      const rateSource: 'product' | 'manual' = product?.rate != null ? 'product' : 'manual';
-      const rateLabel = product?.rate_label ?? `${displayRatePercent.toFixed(2)}% (manual)`;
-      const lifeInsRate = product?.life_ins_monthly_percent ?? 0.00018;
-      const propInsRate = product?.prop_ins_annual_percent ?? 0.00035;
-      const rawProcFee = product?.processing_fee_percent;
-      const processingFeePercent = (rawProcFee !== null && rawProcFee !== undefined && rawProcFee >= 0 && rawProcFee <= 10) ? rawProcFee : 1;
-      const fixedMonths = product?.comparison_fixed_months ?? product?.fixed_period_months ?? 24;
-      const valFee = product?.valuation_fee ?? defaultValFee;
-
-      const emi = Math.round(calcEMI(loanAmount, usedRate, tenorMonths));
-      const lifeInsMonth = Math.round(loanAmount * lifeInsRate);
-      const propInsMonth = Math.round((propertyValue * propInsRate) / 12);
-      const totalMonthly = emi + lifeInsMonth + propInsMonth;
-      const fixedPeriodTotal = totalMonthly * fixedMonths;
-      const downPayment = Math.max(0, propertyValue - loanAmount);
-      const dldFee = isDubai ? Math.round(propertyValue * 0.04 + 580) : 0;
-      const mortgageReg = Math.round(loanAmount * 0.0025 + 290);
-      const transferCentre = 4200;
-      const processingFeeAED = Math.round(loanAmount * processingFeePercent / 100);
-      const upfrontExclDown = dldFee + mortgageReg + transferCentre + processingFeeAED + valFee;
-      const totalUpfront = downPayment + upfrontExclDown;
-      const grandTotal = fixedPeriodTotal + upfrontExclDown;
-
-      return {
-        bank: r, usedRate, displayRatePercent, rateLabel, rateSource, emi,
-        lifeInsMonth, propInsMonth, totalMonthly, fixedMonths, fixedPeriodTotal, rank: 0,
-        downPayment, dldFee, mortgageReg, transferCentre,
-        processingFeePercent, processingFeeAED, valuationFee: valFee,
-        totalUpfront, grandTotal,
-      };
-    });
-
-    const sorted = [...unsorted].sort((a, b) => a.fixedPeriodTotal - b.fixedPeriodTotal);
-    sorted.forEach((c, i) => { c.rank = i; });
-    return sorted;
-  }, [approvedBanks, loanAmount, propertyValue, nominalRate, tenorMonths, emirate, productsByBank]);
-
-  if (costs.length === 0) return null;
-
-  const fixedMonths = costs[0]?.fixedMonths ?? 24;
+function FieldRow({ field }: { field: ReadinessField }) {
+  const icon = field.status === 'confirmed'
+    ? <CheckCircle2 className="h-3 w-3 text-green-600 flex-shrink-0" />
+    : field.status === 'inferred'
+    ? <AlertCircle className="h-3 w-3 text-amber-500 flex-shrink-0" />
+    : <XCircle className="h-3 w-3 text-red-400 flex-shrink-0" />;
 
   return (
-    <div className="surface overflow-hidden">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-border">
-        <div className="form-section-title mb-0">
-          <span>Cost Comparison · Approved Banks</span>
-        </div>
-      </div>
-
-      {/* Bank columns header */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-[hsl(220,18%,97%)]">
-              <th className="text-left px-4 py-2.5 section-label min-w-[160px]"> </th>
-              {costs.map(c => (
-                <th key={c.bank.bank.id} className="text-center px-4 py-2.5 min-w-[140px]">
-                  <p className="text-[13px] font-semibold text-foreground">{c.bank.bank.bankName}</p>
-                  <p className="text-[10px] text-muted-foreground font-normal mt-0.5 font-mono">{c.rateLabel}</p>
-                  {/* Rank badge */}
-                  <div className="flex justify-center mt-1.5">
-                    <span className={cn(
-                      'text-[10px] font-bold px-2 py-0.5 rounded-full',
-                      c.rank === 0 ? 'bg-[hsl(174,85%,32%)] text-white' :
-                      c.rank === 1 ? 'bg-[hsl(216,75%,12%)] text-white' :
-                      c.rank === 2 ? 'bg-amber-600 text-white' :
-                      'bg-border text-muted-foreground'
-                    )}>
-                      {RANK_LABELS[c.rank] ?? `${c.rank + 1}th`}
-                    </span>
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {/* Monthly section */}
-            <SectionHeader label="Monthly Costs" colCount={costs.length} />
-            <Row label="EMI" costs={costs} getValue={c => formatCurrency(c.emi)}
-              getSub={c => `at ${c.displayRatePercent.toFixed(2)}%`} />
-            <Row label="Life Insurance" costs={costs} getValue={c => formatCurrency(c.lifeInsMonth)} />
-            <Row label="Property Insurance" costs={costs} getValue={c => formatCurrency(c.propInsMonth)} />
-            <Row label="Total Monthly" costs={costs} getValue={c => formatCurrency(c.totalMonthly)} bold />
-
-            {/* Fixed period */}
-            <SectionHeader label={`${fixedMonths}-Month Total`} colCount={costs.length} />
-            <Row label={`${fixedMonths}-Month Cost`} costs={costs} getValue={c => formatCurrency(c.fixedPeriodTotal)} bold highlight />
-
-            {/* Upfront */}
-            <SectionHeader label="One-Time Upfront" colCount={costs.length} />
-            <Row label="Down Payment" costs={costs} getValue={c => formatCurrency(c.downPayment)} />
-            <Row label="DLD Fee" costs={costs} getValue={c => c.dldFee ? formatCurrency(c.dldFee) : 'N/A'} />
-            <Row label="Mortgage Registration" costs={costs} getValue={c => formatCurrency(c.mortgageReg)} />
-            <Row label="Transfer Centre" costs={costs} getValue={c => formatCurrency(c.transferCentre)} />
-            <Row label="Processing Fee" costs={costs}
-              getValue={c => formatCurrency(c.processingFeeAED)}
-              getSub={c => `${c.processingFeePercent}%`} />
-            <Row label="Valuation" costs={costs} getValue={c => formatCurrency(c.valuationFee)} />
-            <Row label="Total Upfront" costs={costs} getValue={c => formatCurrency(c.totalUpfront)} bold />
-
-            {/* Grand total */}
-            <SectionHeader label="Total Cost of Ownership" colCount={costs.length} />
-            <Row label={`Fixed Period + Upfront`} costs={costs} getValue={c => formatCurrency(c.grandTotal)} bold highlight />
-          </tbody>
-        </table>
+    <div className="flex items-start gap-1.5 py-0.5">
+      <div className="mt-0.5">{icon}</div>
+      <div className="flex-1 min-w-0">
+        <span className="text-[10px] text-muted-foreground">{field.label}: </span>
+        {field.status !== 'missing'
+          ? <span className="text-[10px] font-medium text-foreground">{field.value}</span>
+          : <span className="text-[10px] text-red-500">Missing{field.hint ? ` — ${field.hint}` : ''}</span>
+        }
       </div>
     </div>
   );
 }
 
-function SectionHeader({ label, colCount }: { label: string; colCount: number }) {
-  return (
-    <tr className="bg-[hsl(220,18%,97%)] border-t border-border">
-      <td colSpan={colCount + 1} className="px-4 py-2">
-        <span className="section-label">{label}</span>
-      </td>
-    </tr>
-  );
-}
+function fmt(n: number) { return n >= 1000000 ? `AED ${(n/1000000).toFixed(1)}M` : n >= 1000 ? `AED ${(n/1000).toFixed(0)}k` : `AED ${n}`; }
 
-function Row({ label, costs, getValue, getSub, bold, highlight }: {
-  label: string;
-  costs: BankCosts[];
-  getValue: (c: BankCosts) => string;
-  getSub?: (c: BankCosts) => string;
-  bold?: boolean;
-  highlight?: boolean;
-}) {
+export default function QualificationReadinessCard(props: Props) {
+  const [showTier2, setShowTier2] = useState(false);
+  const isSE = props.empType === 'self_employed';
+
+  // Tier 1 fields
+  const tier1: ReadinessField[] = [
+    {
+      label: 'Segment',
+      value: props.segment === 'resident_salaried' ? 'Resident Salaried' : props.segment === 'self_employed' ? 'Self-Employed' : props.segment === 'non_resident' ? 'Non-Resident' : null,
+      status: props.segment ? 'confirmed' : 'missing',
+      hint: 'Select segment above',
+    },
+    {
+      label: 'Income',
+      value: props.income > 0 ? fmt(props.income) + '/mo' : null,
+      status: props.income > 0 ? 'confirmed' : 'missing',
+      hint: 'Add income fields',
+    },
+    {
+      label: 'Liabilities',
+      value: props.liabilities > 0 ? fmt(props.liabilities) + '/mo' : '0 (confirm)',
+      status: props.liabilities > 0 ? 'confirmed' : 'inferred',
+    },
+    {
+      label: 'Loan / Property',
+      value: props.loanAmount > 0 ? fmt(props.loanAmount) : null,
+      status: props.loanAmount > 0 ? 'confirmed' : 'missing',
+      hint: 'Or leave blank for max eligibility',
+    },
+    {
+      label: 'DOB / Age',
+      value: props.dob ? `${Math.floor((Date.now() - props.dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000))}y` : null,
+      status: props.dob ? 'confirmed' : 'missing',
+      hint: 'Needed for accurate tenor — use Age toggle if DOB unknown',
+    },
+    ...(isSE ? [
+      {
+        label: 'LOB',
+        value: props.lobMonths != null ? `${props.lobMonths} months` : null,
+        status: (props.lobMonths != null ? (props.lobMonths < 24 ? 'inferred' : 'confirmed') : 'missing') as 'confirmed' | 'inferred' | 'missing',
+        hint: 'Length of business — needed for SE bank eligibility',
+      },
+      {
+        label: 'Ownership Share',
+        value: props.ownershipPct != null ? `${props.ownershipPct}%` : null,
+        status: (props.ownershipPct != null ? 'confirmed' : 'missing') as 'confirmed' | 'inferred' | 'missing',
+        hint: 'Drives qualifying income for SE',
+      },
+      {
+        label: 'Income Route',
+        value: props.incomeRoute || null,
+        status: (props.incomeRoute ? 'confirmed' : 'missing') as 'confirmed' | 'inferred' | 'missing',
+        hint: 'Full doc / Low doc route',
+      },
+    ] : []),
+  ];
+
+  // Tier 2 fields
+  const tier2: ReadinessField[] = [
+    {
+      label: 'Nationality',
+      value: props.nationality || null,
+      status: props.nationality ? 'confirmed' : 'missing',
+      hint: 'Affects bank eligibility rules',
+    },
+    {
+      label: 'Residency',
+      value: props.residency || null,
+      status: props.residency ? 'confirmed' : 'missing',
+    },
+    {
+      label: 'Emirate',
+      value: props.emirate || null,
+      status: props.emirate ? 'confirmed' : 'missing',
+      hint: 'Ask client — affects routing',
+    },
+    {
+      label: 'Transaction type',
+      value: props.txnType || null,
+      status: props.txnType ? 'confirmed' : 'missing',
+    },
+    {
+      label: 'STL preference',
+      value: props.salaryTransfer === 'both' ? 'Both' : props.salaryTransfer === 'stl' ? 'STL' : props.salaryTransfer === 'nstl' ? 'NSTL' : null,
+      status: props.salaryTransfer ? 'confirmed' : 'missing',
+    },
+    {
+      label: 'Property type',
+      value: props.propertyType || null,
+      status: props.propertyType ? 'confirmed' : 'inferred',
+    },
+    {
+      label: 'Purpose',
+      value: props.purpose || null,
+      status: props.purpose ? 'confirmed' : 'inferred',
+    },
+  ];
+
+  const t1Missing = tier1.filter(f => f.status === 'missing').length;
+  const t1Ready = t1Missing === 0;
+  const t2Missing = tier2.filter(f => f.status === 'missing').length;
+  const t2Ready = t2Missing === 0;
+
   return (
-    <tr className={cn('border-t border-border/50', highlight && 'bg-[hsl(174,85%,32%,0.03)]')}>
-      <td className={cn('px-4 py-2.5 text-[12.5px] text-muted-foreground', bold && 'font-semibold text-foreground')}>
-        {label}
-      </td>
-      {costs.map(c => (
-        <td key={c.bank.bank.id} className="px-4 py-2.5 text-center">
-          <p className={cn('text-[12.5px] font-mono', bold ? 'font-semibold text-foreground' : 'text-foreground',
-            highlight && 'text-[hsl(216,75%,12%)]')}>
-            AED {getValue(c)}
-          </p>
-          {getSub && (
-            <p className="text-[10px] text-muted-foreground mt-0.5">{getSub(c)}</p>
-          )}
-        </td>
-      ))}
-    </tr>
+    <div className="border rounded-lg overflow-hidden text-xs bg-background">
+      {/* Tier 1 */}
+      <div className="px-3 py-2 bg-muted/40 border-b">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Tier 1 — DBR inputs
+          </span>
+          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${t1Ready ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+            {t1Ready ? '✓ DBR ready' : `${t1Missing} missing`}
+          </span>
+        </div>
+      </div>
+      <div className="px-3 py-2 space-y-0.5">
+        {tier1.map(f => <FieldRow key={f.label} field={f} />)}
+      </div>
+
+      {/* Tier 2 */}
+      <div className="border-t">
+        <button
+          type="button"
+          onClick={() => setShowTier2(v => !v)}
+          className="w-full px-3 py-2 bg-muted/40 flex items-center justify-between hover:bg-muted/60 transition-colors"
+        >
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Tier 2 — Bank policy inputs
+          </span>
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${t2Ready ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+              {t2Ready ? '✓ Bank fit ready' : `${t2Missing} missing`}
+            </span>
+            {showTier2 ? <ChevronUp className="h-3 w-3 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
+          </div>
+        </button>
+        {showTier2 && (
+          <div className="px-3 py-2 space-y-0.5">
+            {tier2.map(f => <FieldRow key={f.label} field={f} />)}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
