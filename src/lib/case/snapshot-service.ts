@@ -147,17 +147,39 @@ export async function saveQualificationSnapshot(params: SaveParams): Promise<str
   );
   const representativeDbr = savedBankResults.length > 0 ? savedBankResults[0].dbr_percent : null;
 
+  // Use explicit null checks — `||` treats numeric 0 as null which loses
+  // legitimate user input.
+  const nullableNum = (v: number | null | undefined): number | null =>
+    v == null || Number.isNaN(v) ? null : v;
+
+  const applicantPayload = {
+    full_name: applicant.fullName || null,
+    residency_status: applicant.residencyStatus,
+    nationality: applicant.nationality,
+    date_of_birth: applicant.dateOfBirth ? format(applicant.dateOfBirth, 'yyyy-MM-dd') : null,
+    employment_type: applicant.employmentType || null,
+    segment: applicant.segment || null,
+    se_doc_type: applicant.selfEmployedInfo?.docType || null,
+    se_income_route: applicant.selfEmployedInfo?.incomeRoute || null,
+    se_business_name: applicant.selfEmployedInfo?.businessName || null,
+    se_length_of_business_months: nullableNum(applicant.selfEmployedInfo?.lengthOfBusinessMonths),
+    se_ownership_share_percent: nullableNum(applicant.selfEmployedInfo?.ownershipSharePercent),
+    se_income_basis: applicant.selfEmployedInfo?.incomeBasis || null,
+    nr_country_of_residence: applicant.nonResidentInfo?.countryOfResidence || null,
+    nr_income_source_country: applicant.nonResidentInfo?.incomeSourceCountry || null,
+    nr_dab_required: applicant.nonResidentInfo?.dabRequired ?? null,
+    nr_employment_type: applicant.nonResidentInfo?.employmentTypeNR || null,
+  };
+
   let appId: string;
 
   if (editApplicantId) {
     appId = editApplicantId;
-    await supabase.from('applicants').update({
-      full_name: applicant.fullName || null,
-      residency_status: applicant.residencyStatus,
-      nationality: applicant.nationality,
-      date_of_birth: applicant.dateOfBirth ? format(applicant.dateOfBirth, 'yyyy-MM-dd') : null,
-      employment_type: applicant.employmentType || null,
-    } as any).eq('id', appId);
+    const { error: updErr } = await supabase
+      .from('applicants')
+      .update(applicantPayload as any)
+      .eq('id', appId);
+    if (updErr) console.error('Applicant update error:', updErr);
 
     await Promise.all([
       supabase.from('property_details').delete().eq('applicant_id', appId),
@@ -168,14 +190,7 @@ export async function saveQualificationSnapshot(params: SaveParams): Promise<str
   } else {
     const { data: created, error } = await supabase
       .from('applicants')
-      .insert({
-        user_id: userId,
-        full_name: applicant.fullName || null,
-        residency_status: applicant.residencyStatus,
-        nationality: applicant.nationality,
-        date_of_birth: applicant.dateOfBirth ? format(applicant.dateOfBirth, 'yyyy-MM-dd') : null,
-        employment_type: applicant.employmentType || null,
-      } as any)
+      .insert({ user_id: userId, ...applicantPayload } as any)
       .select('id')
       .single();
 
@@ -199,11 +214,6 @@ export async function saveQualificationSnapshot(params: SaveParams): Promise<str
     } as any);
     if (qrErr) console.error('qualification_results insert error:', qrErr);
   }
-
-  // Use explicit null checks — `||` treats numeric 0 as null which loses
-  // legitimate user input.
-  const nullableNum = (v: number | null | undefined): number | null =>
-    v == null || Number.isNaN(v) ? null : v;
 
   const { error: propInsertError } = await supabase.from('property_details').insert({
     applicant_id: appId,

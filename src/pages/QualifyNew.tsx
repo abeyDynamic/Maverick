@@ -216,12 +216,31 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         setNationality(app.nationality || '');
         setDob(app.date_of_birth ? new Date(app.date_of_birth + 'T00:00:00') : null);
         setEmpType(app.employment_type || '');
+        if (app.segment) setSegment(app.segment as any);
+        if (app.se_doc_type || app.se_income_route || app.se_business_name) {
+          setSeInfo({
+            docType: (app.se_doc_type ?? '') as any,
+            incomeRoute: (app.se_income_route ?? '') as any,
+            businessName: app.se_business_name ?? '',
+            lengthOfBusinessMonths: app.se_length_of_business_months ?? null,
+            ownershipSharePercent: app.se_ownership_share_percent ?? null,
+            incomeBasis: app.se_income_basis ?? '',
+          });
+        }
+        if (app.nr_country_of_residence || app.nr_employment_type) {
+          setNrInfo({
+            countryOfResidence: app.nr_country_of_residence ?? '',
+            incomeSourceCountry: app.nr_income_source_country ?? '',
+            dabRequired: !!app.nr_dab_required,
+            employmentTypeNR: app.nr_employment_type ?? 'salaried',
+          });
+        }
       }
 
       if (prop) {
-        setPropertyValue(prop.property_value || 0);
-        setLoanAmount(prop.loan_amount || 0);
-        setLtv(prop.ltv || 80);
+        setPropertyValue(prop.property_value ?? 0);
+        setLoanAmount(prop.loan_amount ?? 0);
+        setLtv(prop.ltv ?? 80);
         setEmirate(prop.emirate || 'dubai');
         setIsDIFC(prop.is_difc || false);
         setIsAlAin(prop.is_al_ain || false);
@@ -229,9 +248,9 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         setPropertyType(prop.property_type || '');
         setPurpose(prop.purpose || '');
         setLoanTypePref(prop.loan_type_preference || 'best');
-        setTenorMonths(prop.preferred_tenor_months || 300);
-        setNominalRate(prop.nominal_rate || 4.5);
-        setStressRate(prop.stress_rate || 7.5);
+        setTenorMonths(prop.preferred_tenor_months ?? 300);
+        setNominalRate(prop.nominal_rate ?? 4.5);
+        setStressRate(prop.stress_rate ?? 7.5);
       }
 
       const incData = (incRes.data ?? []) as any[];

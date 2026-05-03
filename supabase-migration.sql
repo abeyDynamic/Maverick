@@ -348,3 +348,20 @@ ALTER TABLE public.property_details ADD COLUMN IF NOT EXISTS loan_type_preferenc
 -- Enforce one property row per applicant (delete-then-insert pattern needs this).
 CREATE UNIQUE INDEX IF NOT EXISTS property_details_applicant_id_unique
   ON public.property_details(applicant_id);
+
+-- ============================================================
+-- 2026-05 migration: SE/NR profile persistence + segment column
+-- Adds columns the snapshot service writes for self-employed and
+-- non-resident applicants. Idempotent.
+-- ============================================================
+ALTER TABLE public.applicants ADD COLUMN IF NOT EXISTS segment text;
+ALTER TABLE public.applicants ADD COLUMN IF NOT EXISTS se_doc_type text;
+ALTER TABLE public.applicants ADD COLUMN IF NOT EXISTS se_income_route text;
+ALTER TABLE public.applicants ADD COLUMN IF NOT EXISTS se_business_name text;
+ALTER TABLE public.applicants ADD COLUMN IF NOT EXISTS se_length_of_business_months integer;
+ALTER TABLE public.applicants ADD COLUMN IF NOT EXISTS se_ownership_share_percent numeric;
+ALTER TABLE public.applicants ADD COLUMN IF NOT EXISTS se_income_basis text;
+ALTER TABLE public.applicants ADD COLUMN IF NOT EXISTS nr_country_of_residence text;
+ALTER TABLE public.applicants ADD COLUMN IF NOT EXISTS nr_income_source_country text;
+ALTER TABLE public.applicants ADD COLUMN IF NOT EXISTS nr_dab_required boolean DEFAULT false;
+ALTER TABLE public.applicants ADD COLUMN IF NOT EXISTS nr_employment_type text;
