@@ -787,8 +787,10 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         liability_letter_obtained: false,
       })));
     }
-    // Auto-derive tenor from DOB if not explicitly set in extraction.
-    if (parsedDob) {
+    // Tenor — explicit from notes overrides auto-derived from DOB
+    if (result.tenor_months != null && result.tenor_months > 0) {
+      setTenorMonths(result.tenor_months);
+    } else if (parsedDob) {
       const today = new Date();
       let ageYears = today.getFullYear() - parsedDob.getFullYear();
       const monthDiff = today.getMonth() - parsedDob.getMonth();
@@ -801,6 +803,77 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
       const ageBasedMaxTenor = yearsRemaining * 12;
       const sensibleTenor = Math.min(300, Math.max(60, ageBasedMaxTenor));
       setTenorMonths(sensibleTenor);
+    }
+
+    // Tier 2 + contact: merge non-conflicting fields, prompt on conflicts
+    const newTier2 = result.tier2;
+    const newContact = result.contact;
+    if (newTier2 || newContact) {
+      const proposed: Partial<Tier2Data> = {};
+      const conflicts: string[] = [];
+
+      function maybeSet<K extends keyof Tier2Data>(key: K, newValue: Tier2Data[K], label: string) {
+        const currentValue = tier2[key];
+        if (newValue === null || newValue === undefined) return;
+        if (currentValue !== null && currentValue !== undefined && currentValue !== '' && currentValue !== newValue) {
+          conflicts.push(`${label}: "${currentValue}" → "${newValue}"`);
+          return;
+        }
+        proposed[key] = newValue;
+      }
+
+      if (newTier2) {
+        maybeSet('lengthOfServiceMonths', newTier2.length_of_service_months, 'LOS');
+        maybeSet('lengthOfBusinessMonths', newTier2.length_of_business_months, 'LOB');
+        maybeSet('aecbScore', newTier2.aecb_score, 'AECB');
+        maybeSet('salaryCreditsCount', newTier2.salary_credits_count, 'Salary credits');
+        maybeSet('probationConfirmed', newTier2.probation_confirmed, 'Probation');
+        maybeSet('employerCategory', newTier2.employer_category, 'Employer category');
+        maybeSet('visaStatus', newTier2.visa_status, 'Visa');
+        maybeSet('countryOfIncome', newTier2.country_of_income, 'Country of income');
+        maybeSet('foreignBureauAvailable', newTier2.foreign_bureau_available, 'Foreign bureau');
+        maybeSet('foreignBureauScore', newTier2.foreign_bureau_score, 'Foreign bureau score');
+        maybeSet('currency', newTier2.currency, 'Currency');
+      }
+      if (newContact) {
+        maybeSet('phone', newContact.phone, 'Phone');
+        maybeSet('email', newContact.email, 'Email');
+        maybeSet('alternatePhone', newContact.alternate_phone, 'Alternate phone');
+        maybeSet('address', newContact.address, 'Address');
+      }
+
+      if (Object.keys(proposed).length > 0) {
+        setTier2(prev => ({ ...prev, ...proposed }));
+      }
+
+      if (conflicts.length > 0) {
+        const confirmed = window.confirm(
+          `AI wants to change ${conflicts.length} field(s) you've already set:\n\n${conflicts.join('\n')}\n\nReplace with new values?`
+        );
+        if (confirmed) {
+          const overwrites: Partial<Tier2Data> = {};
+          if (newTier2) {
+            if (newTier2.length_of_service_months !== null) overwrites.lengthOfServiceMonths = newTier2.length_of_service_months;
+            if (newTier2.length_of_business_months !== null) overwrites.lengthOfBusinessMonths = newTier2.length_of_business_months;
+            if (newTier2.aecb_score !== null) overwrites.aecbScore = newTier2.aecb_score;
+            if (newTier2.salary_credits_count !== null) overwrites.salaryCreditsCount = newTier2.salary_credits_count;
+            if (newTier2.probation_confirmed !== null) overwrites.probationConfirmed = newTier2.probation_confirmed;
+            if (newTier2.employer_category !== null) overwrites.employerCategory = newTier2.employer_category;
+            if (newTier2.visa_status !== null) overwrites.visaStatus = newTier2.visa_status;
+            if (newTier2.country_of_income !== null) overwrites.countryOfIncome = newTier2.country_of_income;
+            if (newTier2.foreign_bureau_available !== null) overwrites.foreignBureauAvailable = newTier2.foreign_bureau_available;
+            if (newTier2.foreign_bureau_score !== null) overwrites.foreignBureauScore = newTier2.foreign_bureau_score;
+            if (newTier2.currency !== null) overwrites.currency = newTier2.currency;
+          }
+          if (newContact) {
+            if (newContact.phone !== null) overwrites.phone = newContact.phone;
+            if (newContact.email !== null) overwrites.email = newContact.email;
+            if (newContact.alternate_phone !== null) overwrites.alternatePhone = newContact.alternate_phone;
+            if (newContact.address !== null) overwrites.address = newContact.address;
+          }
+          setTier2(prev => ({ ...prev, ...overwrites }));
+        }
+      }
     }
   }
 
