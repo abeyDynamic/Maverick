@@ -32,9 +32,11 @@ export interface ExtractionResult {
   nationality: string | null;
   dob: string | null;
   employment_type: string | null;
+  employer?: string | null;
   property_value: number | null;
   loan_amount: number | null;
   ltv: number | null;
+  tenor_months: number | null;
   emirate: string | null;
   transaction_type: string | null;
   property_type: string | null;
@@ -42,6 +44,25 @@ export interface ExtractionResult {
   salary_transfer: boolean | null;
   income_fields: Array<{ income_type: string; amount: number; percent_considered: number; recurrence: string }>;
   liability_fields: Array<{ liability_type: string; amount: number; credit_card_limit: number; recurrence: string; closed_before_application: boolean }>;
+  tier2: {
+    length_of_service_months: number | null;
+    length_of_business_months: number | null;
+    aecb_score: number | null;
+    salary_credits_count: number | null;
+    probation_confirmed: boolean | null;
+    employer_category: string | null;
+    visa_status: string | null;
+    country_of_income: string | null;
+    foreign_bureau_available: boolean | null;
+    foreign_bureau_score: number | null;
+    currency: string | null;
+  };
+  contact: {
+    phone: string | null;
+    email: string | null;
+    alternate_phone: string | null;
+    address: string | null;
+  };
   confidence: { personal: number; property: number; income: number; liabilities: number };
   unclear: string[];
 }
@@ -107,8 +128,15 @@ function ruleBasedExtract(notes: string): ExtractionResult {
   const result: ExtractionResult = {
     client_name: null, segment: null, residency: null, nationality: null,
     dob: null, employment_type: null, property_value: null, loan_amount: null,
-    ltv: null, emirate: null, transaction_type: null, property_type: null,
+    ltv: null, tenor_months: null, emirate: null, transaction_type: null, property_type: null,
     purpose: null, salary_transfer: null, income_fields: [], liability_fields: [],
+    tier2: {
+      length_of_service_months: null, length_of_business_months: null, aecb_score: null,
+      salary_credits_count: null, probation_confirmed: null, employer_category: null,
+      visa_status: null, country_of_income: null, foreign_bureau_available: null,
+      foreign_bureau_score: null, currency: null,
+    },
+    contact: { phone: null, email: null, alternate_phone: null, address: null },
     confidence: { personal: 0, property: 0, income: 0, liabilities: 0 }, unclear: [],
   };
 
@@ -419,6 +447,14 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
     extracted.property_type && { label: 'Property type', value: extracted.property_type },
     extracted.purpose && { label: 'Purpose', value: extracted.purpose },
     extracted.salary_transfer !== null && { label: 'Salary transfer', value: extracted.salary_transfer ? 'Yes' : 'No' },
+    extracted.tenor_months && { label: 'Tenor', value: `${extracted.tenor_months} months (${(extracted.tenor_months/12).toFixed(0)} years)` },
+    extracted.tier2?.aecb_score && { label: 'AECB', value: String(extracted.tier2.aecb_score) },
+    extracted.tier2?.length_of_service_months && { label: 'LOS', value: `${extracted.tier2.length_of_service_months} months` },
+    extracted.tier2?.length_of_business_months && { label: 'LOB', value: `${extracted.tier2.length_of_business_months} months` },
+    extracted.tier2?.visa_status && { label: 'Visa', value: extracted.tier2.visa_status },
+    extracted.tier2?.country_of_income && { label: 'Income country', value: extracted.tier2.country_of_income },
+    extracted.contact?.phone && { label: 'Phone', value: extracted.contact.phone },
+    extracted.contact?.email && { label: 'Email', value: extracted.contact.email },
     ...extracted.income_fields.map(f => ({ label: f.income_type, value: `AED ${formatCurrency(f.amount)}/mo` })),
     ...extracted.liability_fields.map(f => ({ label: f.liability_type, value: `AED ${formatCurrency(f.amount || f.credit_card_limit)}` })),
   ].filter(Boolean) as { label: string; value: string }[];
