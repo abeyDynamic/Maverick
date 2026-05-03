@@ -584,15 +584,21 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     }
   }
 
-  // Debounced auto-save — only fires if case already has an ID AND state has hydrated.
+  // Debounced auto-save. Fires once the user has entered a client name
+  // (the minimum required for performSave to succeed), regardless of whether
+  // this is the first save or a subsequent edit.
+  //
+  // Guards (in order):
+  //   1. State has hydrated — don't auto-save during initial load
+  //   2. Client name exists — performSave bails without it anyway
   const triggerAutoSave = useCallback(() => {
-    if (!currentAppIdRef.current) return;
     if (!hasHydratedRef.current) return;
+    if (!clientName.trim()) return;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(() => {
       performSave(true);
     }, 3000);
-  }, []);
+  }, [clientName]);
 
   useEffect(() => {
     triggerAutoSave();
