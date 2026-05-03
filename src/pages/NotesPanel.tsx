@@ -65,6 +65,13 @@ export interface ExtractionResult {
     alternate_phone: string | null;
     address: string | null;
   };
+  self_employed?: {
+    business_name: string | null;
+    length_of_business_months: number | null;
+    ownership_share_percent: number | null;
+    income_route: string | null;   // matches SEIncomeRoute values
+    doc_type: 'full_doc' | 'low_doc' | null;
+  } | null;
   confidence: { personal: number; property: number; income: number; liabilities: number };
   unclear: string[];
 }
