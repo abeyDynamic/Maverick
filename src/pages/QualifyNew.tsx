@@ -178,6 +178,26 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   const [ageInput, setAgeInput] = useState<string>('');
   const [empType, setEmpType] = useState('');
 
+  // Tier 2 — Policy facts and contact details
+  const [tier2, setTier2] = useState<Tier2Data>({
+    lengthOfServiceMonths: null,
+    lengthOfBusinessMonths: null,
+    aecbScore: null,
+    salaryCreditsCount: null,
+    probationConfirmed: null,
+    employerCategory: null,
+    visaStatus: null,
+    countryOfIncome: null,
+    foreignBureauAvailable: null,
+    foreignBureauScore: null,
+    currency: 'AED',
+    phone: null,
+    email: null,
+    alternatePhone: null,
+    address: null,
+    communicationNotes: null,
+  });
+
   // Section 2 — Property
   const [propertyValue, setPropertyValue] = useState(0);
   const [ltv, setLtv] = useState(80);
