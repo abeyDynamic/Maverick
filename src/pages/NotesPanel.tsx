@@ -409,6 +409,8 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
     extracted.client_name && { label: 'Name', value: extracted.client_name },
     extracted.segment && { label: 'Segment', value: extracted.segment.replace('_', ' ') },
     extracted.nationality && { label: 'Nationality', value: extracted.nationality },
+    extracted.dob && { label: 'DOB', value: extracted.dob },
+    extracted.employment_type && { label: 'Employment', value: extracted.employment_type.replace('_', ' ') },
     extracted.emirate && { label: 'Emirate', value: extracted.emirate.replace('_', ' ') },
     extracted.property_value && { label: 'Property', value: `AED ${formatCurrency(extracted.property_value)}` },
     extracted.loan_amount && { label: 'Loan', value: `AED ${formatCurrency(extracted.loan_amount)}` },
@@ -656,10 +658,19 @@ export default function NotesPanel({
 
   function handleApplyExtraction() {
     if (!extracted) return;
+    const fieldCount = [
+      extracted.client_name, extracted.segment, extracted.residency, extracted.nationality,
+      extracted.dob, extracted.employment_type, extracted.property_value, extracted.loan_amount,
+      extracted.ltv, extracted.emirate, extracted.transaction_type, extracted.property_type,
+      extracted.purpose, extracted.salary_transfer,
+    ].filter(v => v !== null && v !== undefined && v !== '').length
+      + extracted.income_fields.length
+      + extracted.liability_fields.length;
     onExtract(extracted);
     saveNote(draft);
     setExtracted(null);
-    toast.success('Fields applied to form');
+    // Keep `draft` so the adviser's notes remain visible in chat for follow-up.
+    toast.success(`✓ ${fieldCount} fields applied to form`);
   }
 
   async function handleChatSend() {

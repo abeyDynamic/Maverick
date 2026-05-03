@@ -673,16 +673,41 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   }
 
   function handleExtract(result: ExtractionResult) {
+    // Defensive DOB parsing — accept yyyy-MM-dd, dd/MM/yyyy, dd-MM-yyyy,
+    // "15 March 1982", or empty/null. Reject anything that produces an Invalid Date.
+    function parseDobSafe(input: string | null | undefined): Date | null {
+      if (!input || typeof input !== 'string') return null;
+      const trimmed = input.trim();
+      if (!trimmed) return null;
+      const iso = /^\d{4}-\d{2}-\d{2}$/;
+      if (iso.test(trimmed)) {
+        const d = new Date(trimmed + 'T00:00:00');
+        if (!isNaN(d.getTime())) return d;
+      }
+      const dmy = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+      if (dmy) {
+        const [, d, m, y] = dmy;
+        const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+        if (!isNaN(date.getTime())) return date;
+      }
+      const natural = new Date(trimmed);
+      if (!isNaN(natural.getTime()) && natural.getFullYear() > 1900 && natural.getFullYear() < 2100) {
+        return new Date(natural.getFullYear(), natural.getMonth(), natural.getDate());
+      }
+      return null;
+    }
+    const parsedDob = parseDobSafe(result.dob);
+
     if (result.client_name) setClientName(result.client_name);
     if (result.segment) setSegment(result.segment as any);
     if (result.residency) setResidency(result.residency);
     if (result.nationality) setNationality(result.nationality);
-    if (result.dob) setDob(new Date(result.dob + 'T00:00:00'));
+    if (parsedDob) setDob(parsedDob);
     if (result.employment_type) setEmpType(result.employment_type);
     if (result.emirate) setEmirate(result.emirate);
-    if (result.property_value) setPropertyValue(result.property_value);
-    if (result.loan_amount) setLoanAmount(result.loan_amount);
-    if (result.ltv) setLtv(result.ltv);
+    if (result.property_value != null) setPropertyValue(result.property_value);
+    if (result.loan_amount != null) setLoanAmount(result.loan_amount);
+    if (result.ltv != null) setLtv(result.ltv);
     if (result.transaction_type) setTxnType(result.transaction_type);
     if (result.property_type) setPropertyType(result.property_type);
     if (result.purpose) setPurpose(result.purpose);
@@ -706,6 +731,21 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         closed_before_application: f.closed_before_application,
         liability_letter_obtained: false,
       })));
+    }
+    // Auto-derive tenor from DOB if not explicitly set in extraction.
+    if (parsedDob) {
+      const today = new Date();
+      let ageYears = today.getFullYear() - parsedDob.getFullYear();
+      const monthDiff = today.getMonth() - parsedDob.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < parsedDob.getDate())) {
+        ageYears--;
+      }
+      const isSE = result.employment_type === 'self_employed';
+      const maxAge = isSE ? 70 : 65;
+      const yearsRemaining = Math.max(0, maxAge - ageYears);
+      const ageBasedMaxTenor = yearsRemaining * 12;
+      const sensibleTenor = Math.min(300, Math.max(60, ageBasedMaxTenor));
+      setTenorMonths(sensibleTenor);
     }
   }
 
