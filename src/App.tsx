@@ -12,6 +12,7 @@ import QualifyNew from "./pages/QualifyNew";
 import QualifyEdit from "./pages/QualifyEdit";
 import Results from "./pages/Results";
 import AdminPanel from "./pages/AdminPanel";
+import Policies from "./pages/Policies";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/qualify/new" element={<ProtectedRoute><QualifyNew /></ProtectedRoute>} />
             <Route path="/qualify/:id" element={<ProtectedRoute><QualifyEdit /></ProtectedRoute>} />
             <Route path="/results/:id" element={<ProtectedRoute><Results /></ProtectedRoute>} />
+            <Route path="/policies" element={<ProtectedRoute><Policies /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
