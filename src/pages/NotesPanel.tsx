@@ -773,25 +773,62 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
         </div>
       )}
 
-      {confirmed.length > 0 && (
+      <Section title="1. Case profile" items={caseProfile} tone="green" />
+      <Section title="2. Property & loan" items={propertyAndLoan} tone="green" />
+      <Section title="3. Income for DBR" items={incomeForDbr} tone="green" />
+      <Section title="4. Income evidence (not in DBR)" items={evidence} tone="blue" />
+      <Section title="5. Liabilities included in DBR" items={liabIncluded} tone="green" />
+      <Section title="6. Liabilities — needs adviser confirmation" items={liabPending} tone="amber" />
+
+      {docs.length > 0 && (
         <div className="space-y-1">
-          <p className="text-[10px] font-semibold text-green-700 uppercase tracking-wide">Confirmed</p>
-          <div className="flex flex-wrap gap-1.5">
-            {confirmed.map((f, i) => (
-              <div key={i} className="flex items-center gap-1 bg-green-50 border border-green-200 rounded-md px-2 py-1">
-                <CheckCircle2 className="h-3 w-3 text-green-600 shrink-0" />
-                <span className="text-[10px] text-green-900"><strong>{f.label}:</strong> {f.value}</span>
-              </div>
-            ))}
-          </div>
+          <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide">7. Documents available</p>
+          <ul className="list-disc list-inside text-[10px] text-blue-900 space-y-0.5">
+            {docs.map((d, i) => <li key={i}>{d}</li>)}
+          </ul>
         </div>
       )}
 
-      <div className="flex gap-2 pt-1">
-        <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={onDiscard}>Discard</Button>
-        <Button size="sm" className="flex-1 text-xs bg-green-600 hover:bg-green-700 text-white" onClick={onApply}>
-          Apply all to form
+      {policyQs.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide">8. Policy questions / route checks</p>
+          <ul className="list-disc list-inside text-[10px] text-amber-900 space-y-0.5">
+            {policyQs.map((q, i) => <li key={i}>{q}</li>)}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Button variant="outline" size="sm" className="text-xs" onClick={onDiscard}>Discard</Button>
+        <Button size="sm" className="text-xs bg-green-600 hover:bg-green-700 text-white" onClick={onApply}>
+          Apply safe fields
         </Button>
+        {liabPending.length > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs border-amber-300 text-amber-800"
+            onClick={() => {
+              const merged: ExtractionResult = {
+                ...extracted,
+                liability_fields: [
+                  ...extracted.liability_fields,
+                  ...liabPending.map(p => ({
+                    liability_type: 'Personal Loan 1 EMI',
+                    amount: extracted.liabilities_pending![liabPending.indexOf(p)].amount,
+                    credit_card_limit: 0,
+                    recurrence: 'monthly',
+                    closed_before_application: false,
+                  })),
+                ],
+                liabilities_pending: [],
+              };
+              onUpdate(merged);
+            }}
+          >
+            Add company loan to DBR
+          </Button>
+        )}
       </div>
     </div>
   );
