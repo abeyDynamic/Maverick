@@ -581,6 +581,108 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
   );
 }
 
+// ── Hidden policy retrieval (powers the What-If chat) ─────────────────────
+
+const POLICY_CATEGORIES = [
+  'eligibility', 'income_liability', 'transaction',
+  'property', 'document', 'tat_validity', 'fee', 'note',
+];
+
+function normSegmentForPolicy(s?: string): string | undefined {
+  if (!s) return undefined;
+  const v = s.toLowerCase();
+  if (v.includes('non')) return 'Non-Resident';
+  if (v.includes('resident') || v.includes('salaried') || v.includes('self')) return 'Resident';
+  return undefined;
+}
+
+function normEmploymentForPolicy(s?: string): string | undefined {
+  if (!s) return undefined;
+  const v = s.toLowerCase();
+  if (v.includes('self')) return 'Self Employed';
+  if (v.includes('salar')) return 'Salaried';
+  if (v.includes('mixed')) return 'Mixed';
+  return undefined;
+}
+
+function scorePolicyRow(row: any, message: string, focusAreas: string[]): number {
+  let score = 0;
+  const text = `${row.canonical_attribute ?? ''} ${row.raw_attribute ?? ''} ${row.attribute_description ?? ''} ${row.value ?? ''}`.toLowerCase();
+  const m = message.toLowerCase();
+  for (const f of focusAreas) if (text.includes(f.toLowerCase())) score += 4;
+  for (const w of m.split(/\s+/)) {
+    if (w.length < 4) continue;
+    if (text.includes(w)) score += 1;
+  }
+  if (row.ready_for_search) score += 1;
+  if (row.value_status === 'confirmed') score += 1;
+  if (row.value_status === 'unclear') score -= 1;
+  return score;
+}
+
+async function retrievePolicyContext(
+  message: string,
+  caseFacts?: PolicyFitCaseFacts,
+  availableBanks?: string[],
+): Promise<{ rows: any[]; summary: string }> {
+  try {
+    const parsed = parsePolicyFitIntent(message, availableBanks ?? []);
+    const segment = normSegmentForPolicy(caseFacts?.segment);
+    const employment = normEmploymentForPolicy(caseFacts?.employmentType);
+
+    let q: any = (supabase as any)
+      .from('policy_search_view')
+      .select('*')
+      .in('policy_category', POLICY_CATEGORIES)
+      .limit(800);
+
+    if (parsed.selectedBanks.length > 0) q = q.in('bank', parsed.selectedBanks);
+    if (segment) q = q.or(`segment.eq.${segment},segment.is.null`);
+    if (employment) q = q.or(`employment_type.eq.${employment},employment_type.eq.Mixed,employment_type.is.null`);
+
+    let { data } = await q;
+
+    if (!data || data.length === 0) {
+      let q2: any = (supabase as any)
+        .from('policy_search_view')
+        .select('*')
+        .in('policy_category', POLICY_CATEGORIES)
+        .limit(800);
+      if (parsed.selectedBanks.length > 0) q2 = q2.in('bank', parsed.selectedBanks);
+      const r2 = await q2;
+      data = r2.data ?? [];
+    }
+
+    const rows = (data ?? []) as any[];
+    const ranked = rows
+      .map(r => ({ r, s: scorePolicyRow(r, message, parsed.focusAreas) }))
+      .sort((a, b) => b.s - a.s)
+      .slice(0, 60)
+      .map(x => ({
+        bank: x.r.bank,
+        segment: x.r.segment,
+        employment_type: x.r.employment_type,
+        product_variant: x.r.product_variant,
+        category: x.r.policy_category,
+        attribute: x.r.canonical_attribute ?? x.r.raw_attribute,
+        value: x.r.value,
+        normalized_value: x.r.normalized_value,
+        value_status: x.r.value_status,
+        data_status: x.r.data_status,
+        description: x.r.attribute_description,
+      }));
+
+    const banksInContext = Array.from(new Set(ranked.map(r => r.bank))).slice(0, 20);
+    const summary = `Retrieved ${ranked.length} relevant policy rows across ${banksInContext.length} banks${
+      parsed.focusAreas.length ? ` (focus: ${parsed.focusAreas.join(', ')})` : ''
+    }.`;
+    return { rows: ranked, summary };
+  } catch (e) {
+    console.warn('Policy retrieval failed:', e);
+    return { rows: [], summary: 'No policy context retrieved.' };
+  }
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 export default function NotesPanel({
