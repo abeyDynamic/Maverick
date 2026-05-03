@@ -7,7 +7,7 @@ import DashboardEiborChart from '@/components/dashboard/DashboardEiborChart';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/mortgage-utils';
 import { format } from 'date-fns';
-import { Plus, FileText, Settings, LogOut, TrendingUp } from 'lucide-react';
+import { Plus, FileText, Settings, LogOut, TrendingUp, BookOpen } from 'lucide-react';
 
 interface RecentCase {
   id: string;
@@ -76,6 +76,11 @@ export default function Dashboard() {
             <span className="text-[11px] text-white/40 mr-2">
               {user?.email} · <span className="capitalize">{role}</span>
             </span>
+            <Button variant="ghost" size="sm"
+              className="text-white/60 hover:text-white hover:bg-white/10 h-8 px-3 text-xs"
+              onClick={() => navigate('/policies')}>
+              <BookOpen className="h-3.5 w-3.5 mr-1.5" /> Policies
+            </Button>
             {role === 'admin' && (
               <Button variant="ghost" size="sm"
                 className="text-white/60 hover:text-white hover:bg-white/10 h-8 px-3 text-xs"
