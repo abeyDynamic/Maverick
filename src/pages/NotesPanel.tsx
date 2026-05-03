@@ -721,13 +721,70 @@ export default function NotesPanel({
     setChatMessages(prev => [...prev, { role: 'user', text: question }]);
     setChatLoading(true);
     try {
+      // Retrieve compact, relevant policy context behind the scenes.
+      const policyContext = await retrievePolicyContext(question, policyFitCaseFacts, policyFitBanks);
+
+      const caseFacts = policyFitCaseFacts ?? null;
+      const caseContext = {
+        notes: draft || savedNotes[0]?.note_text || '',
+        caseFacts,
+        qualificationResults: {
+          eligibleBanks: whatIfContext.eligibleBanks,
+          ineligibleBanks: whatIfContext.ineligibleBanks,
+          bankResults: whatIfContext.bankResults.map(r => ({
+            bank: r.bank.bankName,
+            eligible: r.eligible,
+            dbr: r.dbr,
+            dbrLimit: r.dbrLimit,
+            stressEMI: r.stressEMI,
+            stressRate: r.stressRate,
+            minSalaryMet: r.minSalaryMet,
+            dbrMet: r.dbrMet,
+            loanInRange: r.loanInRange,
+            effectiveTenor: r.effectiveTenor,
+            minSalary: r.bank.minSalary,
+            maxTenorMonths: r.bank.maxTenorMonths,
+          })),
+          totalIncome: whatIfContext.totalIncome,
+          totalLiabilities: whatIfContext.totalLiabilities,
+          loanAmount: whatIfContext.loanAmount,
+          stressRate: whatIfContext.stressRate,
+          tenorMonths: whatIfContext.tenorMonths,
+          currentDbr: whatIfContext.currentDbr,
+        },
+        whatIfAnalysis: buildWhatIfAnalysis(
+          whatIfContext.bankResults, whatIfContext.totalIncome,
+          whatIfContext.totalLiabilities, whatIfContext.liabilityFields
+        ),
+        liabilityFields: whatIfContext.liabilityFields,
+        policyContext: policyContext.rows,
+        policyContextSummary: policyContext.summary,
+      };
+
       const { data, error } = await supabase.functions.invoke('maverick-ai', {
-        body: { mode: 'whatif', payload: { question, caseContext: { totalIncome: whatIfContext.totalIncome, totalLiabilities: whatIfContext.totalLiabilities, loanAmount: whatIfContext.loanAmount, stressRate: whatIfContext.stressRate, tenorMonths: whatIfContext.tenorMonths, currentDbr: whatIfContext.currentDbr, eligibleBanks: whatIfContext.eligibleBanks, ineligibleBanks: whatIfContext.ineligibleBanks, whatIfAnalysis: buildWhatIfAnalysis(whatIfContext.bankResults, whatIfContext.totalIncome, whatIfContext.totalLiabilities, whatIfContext.liabilityFields) } } },
+        body: { mode: 'qualification_adviser_chat', payload: { message: question, caseContext } },
       });
       if (error) throw error;
       setChatMessages(prev => [...prev, { role: 'assistant', text: data?.answer ?? 'No response.' }]);
     } catch (e: any) {
       console.error('What-if error:', e);
+      // Fallback to legacy mode so the chat still works if the edge function
+      // hasn't been updated to the new unified mode yet.
+      try {
+        const { data } = await supabase.functions.invoke('maverick-ai', {
+          body: { mode: 'whatif', payload: { question: chatMessages[chatMessages.length - 1]?.text ?? '', caseContext: {
+            totalIncome: whatIfContext.totalIncome, totalLiabilities: whatIfContext.totalLiabilities,
+            loanAmount: whatIfContext.loanAmount, stressRate: whatIfContext.stressRate,
+            tenorMonths: whatIfContext.tenorMonths, currentDbr: whatIfContext.currentDbr,
+            eligibleBanks: whatIfContext.eligibleBanks, ineligibleBanks: whatIfContext.ineligibleBanks,
+            whatIfAnalysis: buildWhatIfAnalysis(whatIfContext.bankResults, whatIfContext.totalIncome, whatIfContext.totalLiabilities, whatIfContext.liabilityFields),
+          } } },
+        });
+        if (data?.answer) {
+          setChatMessages(prev => [...prev, { role: 'assistant', text: data.answer }]);
+          return;
+        }
+      } catch { /* ignore */ }
       setChatMessages(prev => [...prev, { role: 'assistant', text: '⚠️ Could not reach AI — check browser console for details.' }]);
     } finally { setChatLoading(false); }
   }
