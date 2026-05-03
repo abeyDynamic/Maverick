@@ -120,6 +120,13 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentAppIdRef = useRef<string | undefined>(editApplicantId);
+  // Gate auto-save until either:
+  //   (a) a fresh case (no editApplicantId) — safe to auto-save anytime, BUT
+  //       triggerAutoSave already short-circuits if there's no appId yet, so no wipe risk.
+  //   (b) an edit case where loadApplicant() has finished hydrating state.
+  // Without this gate, the very first auto-save fires with default empty state
+  // and wipes property/income/liability rows in Supabase before the load completes.
+  const hasHydratedRef = useRef<boolean>(!editApplicantId);
 
   // Banks, notes & products from Supabase
   const [banks, setBanks] = useState<CaseBank[]>([]);
@@ -284,6 +291,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         });
         setCoBorrowers(cbs);
       }
+      hasHydratedRef.current = true;
     }
     loadApplicant();
   }, [editApplicantId]);
@@ -576,9 +584,10 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     }
   }
 
-  // Debounced auto-save — only fires if case already has an ID (never auto-creates)
+  // Debounced auto-save — only fires if case already has an ID AND state has hydrated.
   const triggerAutoSave = useCallback(() => {
     if (!currentAppIdRef.current) return;
+    if (!hasHydratedRef.current) return;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(() => {
       performSave(true);
