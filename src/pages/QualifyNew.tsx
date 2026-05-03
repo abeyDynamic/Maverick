@@ -27,6 +27,7 @@ import DebugPanel from '@/components/qualify/DebugPanel';
 import SegmentSelector from '@/components/qualify/SegmentSelector';
 import NotesPanel, { type ExtractionResult, type WhatIfContext } from '@/components/qualify/NotesPanel';
 import SelfEmployedSection from '@/components/qualify/SelfEmployedSection';
+import Tier2ProfileAccordion, { type Tier2Data } from '@/components/qualify/Tier2ProfileAccordion';
 
 import NonResidentSection from '@/components/qualify/NonResidentSection';
 import {
