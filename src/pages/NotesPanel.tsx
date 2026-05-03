@@ -93,6 +93,8 @@ interface NotesPanelProps {
   onRequestSave?: () => Promise<string | undefined>;
   whatIfContext: WhatIfContext;
   embedded?: boolean;
+  policyFitCaseFacts?: PolicyFitCaseFacts;
+  policyFitBanks?: string[];
 }
 
 // ── Missing field definitions ──────────────────────────────────────────────
