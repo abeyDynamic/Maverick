@@ -587,35 +587,97 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
     setEditVal('');
   }
 
-  const confirmed = [
+  // Segment label: residency-based (Resident / Non-Resident), not employment.
+  const segmentLabel = extracted.residency === 'non_resident' ? 'Non-Resident'
+    : extracted.residency ? 'Resident'
+    : extracted.segment === 'non_resident' ? 'Non-Resident'
+    : extracted.segment ? 'Resident'
+    : null;
+  const employmentLabel = extracted.employment_type === 'self_employed' ? 'Self Employed'
+    : extracted.employment_type === 'salaried' ? 'Salaried'
+    : extracted.employment_type ? extracted.employment_type.replace('_', ' ') : null;
+
+  const caseProfile = [
     extracted.client_name && { label: 'Name', value: extracted.client_name },
-    extracted.segment && { label: 'Segment', value: extracted.segment.replace('_', ' ') },
+    segmentLabel && { label: 'Segment', value: segmentLabel },
+    employmentLabel && { label: 'Employment', value: employmentLabel },
     extracted.nationality && { label: 'Nationality', value: extracted.nationality },
     extracted.dob && { label: 'DOB', value: extracted.dob },
-    extracted.employment_type && { label: 'Employment', value: extracted.employment_type.replace('_', ' ') },
-    extracted.emirate && { label: 'Emirate', value: extracted.emirate.replace('_', ' ') },
-    extracted.property_value && { label: 'Property', value: `AED ${formatCurrency(extracted.property_value)}` },
-    extracted.loan_amount && { label: 'Loan', value: `AED ${formatCurrency(extracted.loan_amount)}` },
-    extracted.ltv && { label: 'LTV', value: `${extracted.ltv}%` },
-    extracted.transaction_type && { label: 'Transaction', value: extracted.transaction_type.replace('_', ' ') },
-    extracted.property_type && { label: 'Property type', value: extracted.property_type },
-    extracted.purpose && { label: 'Purpose', value: extracted.purpose },
-    extracted.salary_transfer !== null && { label: 'Salary transfer', value: extracted.salary_transfer ? 'Yes' : 'No' },
-    extracted.tenor_months && { label: 'Tenor', value: `${extracted.tenor_months} months (${(extracted.tenor_months/12).toFixed(0)} years)` },
-    extracted.tier2?.aecb_score && { label: 'AECB', value: String(extracted.tier2.aecb_score) },
-    extracted.tier2?.length_of_service_months && { label: 'LOS', value: `${extracted.tier2.length_of_service_months} months` },
-    extracted.tier2?.length_of_business_months && { label: 'LOB', value: `${extracted.tier2.length_of_business_months} months` },
-    extracted.tier2?.visa_status && { label: 'Visa', value: extracted.tier2.visa_status },
-    extracted.tier2?.country_of_income && { label: 'Income country', value: extracted.tier2.country_of_income },
-    extracted.contact?.phone && { label: 'Phone', value: extracted.contact.phone },
-    extracted.contact?.email && { label: 'Email', value: extracted.contact.email },
     extracted.self_employed?.business_name && { label: 'Business', value: extracted.self_employed.business_name },
     extracted.self_employed?.ownership_share_percent && { label: 'Ownership', value: `${extracted.self_employed.ownership_share_percent}%` },
     extracted.self_employed?.income_route && { label: 'Income route', value: extracted.self_employed.income_route.replace(/_/g, ' ') },
     extracted.self_employed?.doc_type && { label: 'Doc type', value: extracted.self_employed.doc_type.replace('_', '-') },
-    ...extracted.income_fields.map(f => ({ label: f.income_type, value: `AED ${formatCurrency(f.amount)}/mo` })),
-    ...extracted.liability_fields.map(f => ({ label: f.liability_type, value: `AED ${formatCurrency(f.amount || f.credit_card_limit)}` })),
+    extracted.tier2?.length_of_business_months && { label: 'LOB', value: `${extracted.tier2.length_of_business_months} months` },
+    extracted.tier2?.length_of_service_months && { label: 'LOS', value: `${extracted.tier2.length_of_service_months} months` },
+    extracted.tier2?.aecb_score && { label: 'AECB', value: String(extracted.tier2.aecb_score) },
   ].filter(Boolean) as { label: string; value: string }[];
+
+  const propertyAndLoan = [
+    extracted.emirate && { label: 'Emirate', value: extracted.emirate.replace('_', ' ') },
+    extracted.property_type && { label: 'Property type', value: extracted.property_type },
+    extracted.purpose && { label: 'Purpose', value: extracted.purpose },
+    extracted.property_value && { label: 'Property value', value: `AED ${formatCurrency(extracted.property_value)}` },
+    extracted.loan_amount && { label: 'Requested loan', value: `AED ${formatCurrency(extracted.loan_amount)}` },
+    extracted.ltv && { label: 'LTV', value: `${extracted.ltv}%` },
+    extracted.tenor_months && { label: 'Tenor', value: `${extracted.tenor_months} months (${(extracted.tenor_months/12).toFixed(0)} years)` },
+    extracted.transaction_type && { label: 'Transaction', value: extracted.transaction_type.replace('_', ' ') },
+    extracted.salary_transfer !== null && { label: 'Salary transfer', value: extracted.salary_transfer ? 'Yes' : 'No' },
+  ].filter(Boolean) as { label: string; value: string }[];
+
+  const incomeForDbr = extracted.income_fields.map(f => ({
+    label: f.income_type,
+    value: `AED ${formatCurrency(f.amount)}/mo`,
+  }));
+
+  const evidence = (extracted.income_evidence ?? []).map(e => {
+    const unit = e.unit === 'monthly' ? '/mo' : e.unit === 'annual' ? '/year' : '';
+    return { label: e.label, value: `AED ${formatCurrency(e.amount)}${unit}`, note: e.note };
+  });
+
+  const liabIncluded = extracted.liability_fields.map(f => ({
+    label: f.liability_type,
+    value: f.credit_card_limit > 0
+      ? `Limit AED ${formatCurrency(f.credit_card_limit)} (DBR ≈ AED ${formatCurrency(Math.round(f.credit_card_limit * 0.05))}/mo)`
+      : `AED ${formatCurrency(f.amount)}/mo`,
+  }));
+
+  const liabPending = (extracted.liabilities_pending ?? []).map(p => ({
+    label: p.liability_type,
+    value: `AED ${formatCurrency(p.amount)}/mo`,
+    reason: p.reason,
+  }));
+
+  const docs = extracted.documents_available ?? [];
+  const policyQs = extracted.policy_questions ?? [];
+
+  function Section({ title, items, tone = 'green' }: {
+    title: string;
+    items: { label: string; value: string; note?: string; reason?: string }[];
+    tone?: 'green' | 'amber' | 'blue' | 'gray';
+  }) {
+    if (items.length === 0) return null;
+    const color = tone === 'green' ? 'border-green-200 bg-green-50 text-green-900'
+      : tone === 'amber' ? 'border-amber-200 bg-amber-50 text-amber-900'
+      : tone === 'blue' ? 'border-blue-200 bg-blue-50 text-blue-900'
+      : 'border-border bg-secondary text-foreground';
+    const titleColor = tone === 'green' ? 'text-green-700'
+      : tone === 'amber' ? 'text-amber-700'
+      : tone === 'blue' ? 'text-blue-700'
+      : 'text-muted-foreground';
+    return (
+      <div className="space-y-1">
+        <p className={`text-[10px] font-semibold uppercase tracking-wide ${titleColor}`}>{title}</p>
+        <div className="flex flex-wrap gap-1.5">
+          {items.map((f, i) => (
+            <div key={i} className={`flex flex-col gap-0.5 rounded-md border px-2 py-1 ${color}`}>
+              <span className="text-[10px]"><strong>{f.label}:</strong> {f.value}</span>
+              {(f.note || f.reason) && <span className="text-[9px] italic opacity-80">{f.note || f.reason}</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
