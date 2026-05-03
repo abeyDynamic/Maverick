@@ -732,6 +732,21 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         liability_letter_obtained: false,
       })));
     }
+    // Auto-derive tenor from DOB if not explicitly set in extraction.
+    if (parsedDob) {
+      const today = new Date();
+      let ageYears = today.getFullYear() - parsedDob.getFullYear();
+      const monthDiff = today.getMonth() - parsedDob.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < parsedDob.getDate())) {
+        ageYears--;
+      }
+      const isSE = result.employment_type === 'self_employed';
+      const maxAge = isSE ? 70 : 65;
+      const yearsRemaining = Math.max(0, maxAge - ageYears);
+      const ageBasedMaxTenor = yearsRemaining * 12;
+      const sensibleTenor = Math.min(300, Math.max(60, ageBasedMaxTenor));
+      setTenorMonths(sensibleTenor);
+    }
   }
 
   return (
