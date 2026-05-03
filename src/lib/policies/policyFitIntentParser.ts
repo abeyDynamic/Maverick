@@ -31,8 +31,8 @@ function normalize(s: unknown): string {
 }
 
 export function parsePolicyFitIntent(
-  message: string,
-  availableBanks: string[],
+  message: unknown,
+  availableBanks: unknown,
 ): {
   intent: PolicyFitIntent;
   selectedBanks: string[];
@@ -40,6 +40,9 @@ export function parsePolicyFitIntent(
   focusAreas: string[];
 } {
   const text = normalize(message);
+  const safeAvailable: string[] = Array.isArray(availableBanks)
+    ? availableBanks.filter((b): b is string => typeof b === 'string')
+    : [];
   const focusAreas: string[] = [];
 
   // Match banks by alias, then resolve back to availableBanks
