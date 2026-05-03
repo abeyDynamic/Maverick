@@ -658,10 +658,19 @@ export default function NotesPanel({
 
   function handleApplyExtraction() {
     if (!extracted) return;
+    const fieldCount = [
+      extracted.client_name, extracted.segment, extracted.residency, extracted.nationality,
+      extracted.dob, extracted.employment_type, extracted.property_value, extracted.loan_amount,
+      extracted.ltv, extracted.emirate, extracted.transaction_type, extracted.property_type,
+      extracted.purpose, extracted.salary_transfer,
+    ].filter(v => v !== null && v !== undefined && v !== '').length
+      + extracted.income_fields.length
+      + extracted.liability_fields.length;
     onExtract(extracted);
     saveNote(draft);
     setExtracted(null);
-    toast.success('Fields applied to form');
+    // Keep `draft` so the adviser's notes remain visible in chat for follow-up.
+    toast.success(`✓ ${fieldCount} fields applied to form`);
   }
 
   async function handleChatSend() {
