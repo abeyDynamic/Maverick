@@ -120,18 +120,30 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
   return (
     <div className="surface overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-border">
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between">
         <div className="form-section-title mb-0">
           <span>Cost Comparison · Approved Banks</span>
         </div>
+        {costs.length > 4 && (
+          <span className="text-[11px] text-muted-foreground">
+            ← Scroll horizontally to see all {costs.length} banks →
+          </span>
+        )}
       </div>
 
-      {/* Bank columns header */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      {/* Table with always-visible horizontal scroll and right-edge fade */}
+      <div className="relative">
+        <div
+          className="overflow-x-auto"
+          style={{
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'hsl(var(--border)) transparent',
+          }}
+        >
+          <table className="w-full text-sm" style={{ minWidth: `${160 + costs.length * 140}px` }}>
           <thead>
             <tr className="border-b border-border bg-[hsl(220,18%,97%)]">
-              <th className="text-left px-4 py-2.5 section-label min-w-[160px]"> </th>
+              <th className="text-left px-4 py-2.5 section-label sticky left-0 bg-[hsl(220,18%,97%)] z-10 min-w-[160px]"> </th>
               {costs.map(c => (
                 <th key={c.bank.bank.id} className="text-center px-4 py-2.5 min-w-[140px]">
                   <p className="text-[13px] font-semibold text-foreground">{c.bank.bank.bankName}</p>
@@ -182,6 +194,15 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
             <Row label={`Fixed Period + Upfront`} costs={costs} getValue={c => formatCurrency(c.grandTotal)} bold highlight />
           </tbody>
         </table>
+        </div>
+        {costs.length > 4 && (
+          <div
+            className="pointer-events-none absolute top-0 right-0 h-full w-12"
+            style={{
+              background: 'linear-gradient(to right, transparent, hsl(var(--background)) 70%)',
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -190,7 +211,7 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
 function SectionHeader({ label, colCount }: { label: string; colCount: number }) {
   return (
     <tr className="bg-[hsl(220,18%,97%)] border-t border-border">
-      <td colSpan={colCount + 1} className="px-4 py-2">
+      <td colSpan={colCount + 1} className="px-4 py-2 sticky left-0 bg-[hsl(220,18%,97%)]">
         <span className="section-label">{label}</span>
       </td>
     </tr>
@@ -207,7 +228,7 @@ function Row({ label, costs, getValue, getSub, bold, highlight }: {
 }) {
   return (
     <tr className={cn('border-t border-border/50', highlight && 'bg-[hsl(174,85%,32%,0.03)]')}>
-      <td className={cn('px-4 py-2.5 text-[12.5px] text-muted-foreground', bold && 'font-semibold text-foreground')}>
+      <td className={cn('px-4 py-2.5 text-[12.5px] text-muted-foreground sticky left-0 bg-background', bold && 'font-semibold text-foreground')}>
         {label}
       </td>
       {costs.map(c => (
