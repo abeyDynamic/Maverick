@@ -59,7 +59,7 @@ export function parsePolicyFitIntent(
   }
 
   const selectedBanks: string[] = [];
-  const lowerAvail = availableBanks.map(b => ({ raw: b, n: normalize(b) }));
+  const lowerAvail = safeAvailable.map(b => ({ raw: b, n: normalize(b) }));
   for (const canonical of matchedCanonicals) {
     const aliases = BANK_ALIASES[canonical];
     const hit = lowerAvail.find(b =>
