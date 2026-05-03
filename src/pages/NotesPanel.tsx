@@ -513,6 +513,10 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
     extracted.tier2?.country_of_income && { label: 'Income country', value: extracted.tier2.country_of_income },
     extracted.contact?.phone && { label: 'Phone', value: extracted.contact.phone },
     extracted.contact?.email && { label: 'Email', value: extracted.contact.email },
+    extracted.self_employed?.business_name && { label: 'Business', value: extracted.self_employed.business_name },
+    extracted.self_employed?.ownership_share_percent && { label: 'Ownership', value: `${extracted.self_employed.ownership_share_percent}%` },
+    extracted.self_employed?.income_route && { label: 'Income route', value: extracted.self_employed.income_route.replace(/_/g, ' ') },
+    extracted.self_employed?.doc_type && { label: 'Doc type', value: extracted.self_employed.doc_type.replace('_', '-') },
     ...extracted.income_fields.map(f => ({ label: f.income_type, value: `AED ${formatCurrency(f.amount)}/mo` })),
     ...extracted.liability_fields.map(f => ({ label: f.liability_type, value: `AED ${formatCurrency(f.amount || f.credit_card_limit)}` })),
   ].filter(Boolean) as { label: string; value: string }[];
