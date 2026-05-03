@@ -787,6 +787,18 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         liability_letter_obtained: false,
       })));
     }
+
+    // Self-employed details
+    if (result.self_employed || result.employment_type === 'self_employed') {
+      const se = result.self_employed;
+      setSeInfo(prev => ({
+        ...prev,
+        businessName: se?.business_name ?? prev.businessName,
+        lengthOfBusinessMonths: se?.length_of_business_months ?? prev.lengthOfBusinessMonths,
+        ownershipSharePercent: se?.ownership_share_percent ?? prev.ownershipSharePercent,
+        incomeRoute: (se?.income_route ?? prev.incomeRoute) as any,
+        docType: (se?.doc_type ?? prev.docType) as any,
+      }));
     // Tenor — explicit from notes overrides auto-derived from DOB
     if (result.tenor_months != null && result.tenor_months > 0) {
       setTenorMonths(result.tenor_months);
