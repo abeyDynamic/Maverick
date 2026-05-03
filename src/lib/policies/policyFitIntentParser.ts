@@ -22,13 +22,17 @@ const BANK_ALIASES: Record<string, string[]> = {
   'UAB': ['uab', 'united arab bank'],
 };
 
-function normalize(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+function safeLower(value: unknown): string {
+  return typeof value === 'string' ? value.toLowerCase() : '';
+}
+
+function normalize(s: unknown): string {
+  return safeLower(s).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 export function parsePolicyFitIntent(
-  message: string,
-  availableBanks: string[],
+  message: unknown,
+  availableBanks: unknown,
 ): {
   intent: PolicyFitIntent;
   selectedBanks: string[];
@@ -36,6 +40,9 @@ export function parsePolicyFitIntent(
   focusAreas: string[];
 } {
   const text = normalize(message);
+  const safeAvailable: string[] = Array.isArray(availableBanks)
+    ? availableBanks.filter((b): b is string => typeof b === 'string')
+    : [];
   const focusAreas: string[] = [];
 
   // Match banks by alias, then resolve back to availableBanks
@@ -52,7 +59,7 @@ export function parsePolicyFitIntent(
   }
 
   const selectedBanks: string[] = [];
-  const lowerAvail = availableBanks.map(b => ({ raw: b, n: normalize(b) }));
+  const lowerAvail = safeAvailable.map(b => ({ raw: b, n: normalize(b) }));
   for (const canonical of matchedCanonicals) {
     const aliases = BANK_ALIASES[canonical];
     const hit = lowerAvail.find(b =>

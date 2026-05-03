@@ -27,10 +27,13 @@ export function usePolicyFitChat({ caseFacts, availableBanks = [] }: UsePolicyFi
       setLoading(true);
       setError(null);
       try {
-        const parsed = parsePolicyFitIntent(message, availableBanks);
+        const safeMessage = typeof message === 'string' ? message : '';
+        const safeAvailableBanks = Array.isArray(availableBanks) ? availableBanks : [];
+        const safeCaseFacts: any = caseFacts ?? {};
+        const parsed = parsePolicyFitIntent(safeMessage, safeAvailableBanks);
 
-        const segment = normalizePolicySegment(caseFacts.segment);
-        const employmentType = normalizePolicyEmployment(caseFacts.employmentType);
+        const segment = normalizePolicySegment(safeCaseFacts.segment);
+        const employmentType = normalizePolicyEmployment(safeCaseFacts.employmentType);
 
         let query = (supabase as any)
           .from('policy_search_view')
@@ -128,17 +131,21 @@ function slimBank(b: any) {
   };
 }
 
-function normalizePolicySegment(segment?: string): string | undefined {
-  if (!segment) return undefined;
-  const value = segment.toLowerCase();
+function safeLower(value: unknown): string {
+  return typeof value === 'string' ? value.toLowerCase() : '';
+}
+
+function normalizePolicySegment(segment?: unknown): string | undefined {
+  const value = safeLower(segment);
+  if (!value) return undefined;
   if (value.includes('non')) return 'Non-Resident';
   if (value.includes('resident')) return 'Resident';
   return undefined;
 }
 
-function normalizePolicyEmployment(employmentType?: string): string | undefined {
-  if (!employmentType) return undefined;
-  const value = employmentType.toLowerCase();
+function normalizePolicyEmployment(employmentType?: unknown): string | undefined {
+  const value = safeLower(employmentType);
+  if (!value) return undefined;
   if (value.includes('self')) return 'Self Employed';
   if (value.includes('salary') || value.includes('salaried')) return 'Salaried';
   if (value.includes('mixed')) return 'Mixed';
