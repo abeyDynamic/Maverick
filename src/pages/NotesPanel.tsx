@@ -15,8 +15,8 @@ import { COUNTRIES, EMIRATES, calculateStressEMI, formatCurrency } from '@/lib/m
 import { buildWhatIfAnalysis } from '@/lib/case/stage1-engine';
 import type { CaseBankResult } from '@/lib/case/stage1-engine';
 import type { CaseLiabilityField } from '@/lib/case/types';
-import PolicyFitChatPanel from '@/components/qualify/PolicyFitChatPanel';
 import type { PolicyFitCaseFacts } from '@/lib/policies/policyFitTypes';
+import { parsePolicyFitIntent } from '@/lib/policies/policyFitIntentParser';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -581,6 +581,108 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
   );
 }
 
+// ── Hidden policy retrieval (powers the What-If chat) ─────────────────────
+
+const POLICY_CATEGORIES = [
+  'eligibility', 'income_liability', 'transaction',
+  'property', 'document', 'tat_validity', 'fee', 'note',
+];
+
+function normSegmentForPolicy(s?: string): string | undefined {
+  if (!s) return undefined;
+  const v = s.toLowerCase();
+  if (v.includes('non')) return 'Non-Resident';
+  if (v.includes('resident') || v.includes('salaried') || v.includes('self')) return 'Resident';
+  return undefined;
+}
+
+function normEmploymentForPolicy(s?: string): string | undefined {
+  if (!s) return undefined;
+  const v = s.toLowerCase();
+  if (v.includes('self')) return 'Self Employed';
+  if (v.includes('salar')) return 'Salaried';
+  if (v.includes('mixed')) return 'Mixed';
+  return undefined;
+}
+
+function scorePolicyRow(row: any, message: string, focusAreas: string[]): number {
+  let score = 0;
+  const text = `${row.canonical_attribute ?? ''} ${row.raw_attribute ?? ''} ${row.attribute_description ?? ''} ${row.value ?? ''}`.toLowerCase();
+  const m = message.toLowerCase();
+  for (const f of focusAreas) if (text.includes(f.toLowerCase())) score += 4;
+  for (const w of m.split(/\s+/)) {
+    if (w.length < 4) continue;
+    if (text.includes(w)) score += 1;
+  }
+  if (row.ready_for_search) score += 1;
+  if (row.value_status === 'confirmed') score += 1;
+  if (row.value_status === 'unclear') score -= 1;
+  return score;
+}
+
+async function retrievePolicyContext(
+  message: string,
+  caseFacts?: PolicyFitCaseFacts,
+  availableBanks?: string[],
+): Promise<{ rows: any[]; summary: string }> {
+  try {
+    const parsed = parsePolicyFitIntent(message, availableBanks ?? []);
+    const segment = normSegmentForPolicy(caseFacts?.segment);
+    const employment = normEmploymentForPolicy(caseFacts?.employmentType);
+
+    let q: any = (supabase as any)
+      .from('policy_search_view')
+      .select('*')
+      .in('policy_category', POLICY_CATEGORIES)
+      .limit(800);
+
+    if (parsed.selectedBanks.length > 0) q = q.in('bank', parsed.selectedBanks);
+    if (segment) q = q.or(`segment.eq.${segment},segment.is.null`);
+    if (employment) q = q.or(`employment_type.eq.${employment},employment_type.eq.Mixed,employment_type.is.null`);
+
+    let { data } = await q;
+
+    if (!data || data.length === 0) {
+      let q2: any = (supabase as any)
+        .from('policy_search_view')
+        .select('*')
+        .in('policy_category', POLICY_CATEGORIES)
+        .limit(800);
+      if (parsed.selectedBanks.length > 0) q2 = q2.in('bank', parsed.selectedBanks);
+      const r2 = await q2;
+      data = r2.data ?? [];
+    }
+
+    const rows = (data ?? []) as any[];
+    const ranked = rows
+      .map(r => ({ r, s: scorePolicyRow(r, message, parsed.focusAreas) }))
+      .sort((a, b) => b.s - a.s)
+      .slice(0, 60)
+      .map(x => ({
+        bank: x.r.bank,
+        segment: x.r.segment,
+        employment_type: x.r.employment_type,
+        product_variant: x.r.product_variant,
+        category: x.r.policy_category,
+        attribute: x.r.canonical_attribute ?? x.r.raw_attribute,
+        value: x.r.value,
+        normalized_value: x.r.normalized_value,
+        value_status: x.r.value_status,
+        data_status: x.r.data_status,
+        description: x.r.attribute_description,
+      }));
+
+    const banksInContext = Array.from(new Set(ranked.map(r => r.bank))).slice(0, 20);
+    const summary = `Retrieved ${ranked.length} relevant policy rows across ${banksInContext.length} banks${
+      parsed.focusAreas.length ? ` (focus: ${parsed.focusAreas.join(', ')})` : ''
+    }.`;
+    return { rows: ranked, summary };
+  } catch (e) {
+    console.warn('Policy retrieval failed:', e);
+    return { rows: [], summary: 'No policy context retrieved.' };
+  }
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 export default function NotesPanel({
@@ -600,7 +702,7 @@ export default function NotesPanel({
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [minimised, setMinimised] = useState(false);
-  const [tab, setTab] = useState<'notes' | 'whatif' | 'policyfit' | 'history'>('notes');
+  const [tab, setTab] = useState<'notes' | 'whatif' | 'history'>('notes');
   const [draft, setDraft] = useState('');
   const [sessionLabel, setSessionLabel] = useState('');
   const [savedNotes, setSavedNotes] = useState<ClientNote[]>([]);
@@ -721,13 +823,70 @@ export default function NotesPanel({
     setChatMessages(prev => [...prev, { role: 'user', text: question }]);
     setChatLoading(true);
     try {
+      // Retrieve compact, relevant policy context behind the scenes.
+      const policyContext = await retrievePolicyContext(question, policyFitCaseFacts, policyFitBanks);
+
+      const caseFacts = policyFitCaseFacts ?? null;
+      const caseContext = {
+        notes: draft || savedNotes[0]?.note_text || '',
+        caseFacts,
+        qualificationResults: {
+          eligibleBanks: whatIfContext.eligibleBanks,
+          ineligibleBanks: whatIfContext.ineligibleBanks,
+          bankResults: whatIfContext.bankResults.map(r => ({
+            bank: r.bank.bankName,
+            eligible: r.eligible,
+            dbr: r.dbr,
+            dbrLimit: r.dbrLimit,
+            stressEMI: r.stressEMI,
+            stressRate: r.stressRate,
+            minSalaryMet: r.minSalaryMet,
+            dbrMet: r.dbrMet,
+            loanInRange: r.loanInRange,
+            effectiveTenor: r.effectiveTenor,
+            minSalary: r.bank.minSalary,
+            maxTenorMonths: r.bank.maxTenorMonths,
+          })),
+          totalIncome: whatIfContext.totalIncome,
+          totalLiabilities: whatIfContext.totalLiabilities,
+          loanAmount: whatIfContext.loanAmount,
+          stressRate: whatIfContext.stressRate,
+          tenorMonths: whatIfContext.tenorMonths,
+          currentDbr: whatIfContext.currentDbr,
+        },
+        whatIfAnalysis: buildWhatIfAnalysis(
+          whatIfContext.bankResults, whatIfContext.totalIncome,
+          whatIfContext.totalLiabilities, whatIfContext.liabilityFields
+        ),
+        liabilityFields: whatIfContext.liabilityFields,
+        policyContext: policyContext.rows,
+        policyContextSummary: policyContext.summary,
+      };
+
       const { data, error } = await supabase.functions.invoke('maverick-ai', {
-        body: { mode: 'whatif', payload: { question, caseContext: { totalIncome: whatIfContext.totalIncome, totalLiabilities: whatIfContext.totalLiabilities, loanAmount: whatIfContext.loanAmount, stressRate: whatIfContext.stressRate, tenorMonths: whatIfContext.tenorMonths, currentDbr: whatIfContext.currentDbr, eligibleBanks: whatIfContext.eligibleBanks, ineligibleBanks: whatIfContext.ineligibleBanks, whatIfAnalysis: buildWhatIfAnalysis(whatIfContext.bankResults, whatIfContext.totalIncome, whatIfContext.totalLiabilities, whatIfContext.liabilityFields) } } },
+        body: { mode: 'qualification_adviser_chat', payload: { message: question, caseContext } },
       });
       if (error) throw error;
       setChatMessages(prev => [...prev, { role: 'assistant', text: data?.answer ?? 'No response.' }]);
     } catch (e: any) {
       console.error('What-if error:', e);
+      // Fallback to legacy mode so the chat still works if the edge function
+      // hasn't been updated to the new unified mode yet.
+      try {
+        const { data } = await supabase.functions.invoke('maverick-ai', {
+          body: { mode: 'whatif', payload: { question, caseContext: {
+            totalIncome: whatIfContext.totalIncome, totalLiabilities: whatIfContext.totalLiabilities,
+            loanAmount: whatIfContext.loanAmount, stressRate: whatIfContext.stressRate,
+            tenorMonths: whatIfContext.tenorMonths, currentDbr: whatIfContext.currentDbr,
+            eligibleBanks: whatIfContext.eligibleBanks, ineligibleBanks: whatIfContext.ineligibleBanks,
+            whatIfAnalysis: buildWhatIfAnalysis(whatIfContext.bankResults, whatIfContext.totalIncome, whatIfContext.totalLiabilities, whatIfContext.liabilityFields),
+          } } },
+        });
+        if (data?.answer) {
+          setChatMessages(prev => [...prev, { role: 'assistant', text: data.answer }]);
+          return;
+        }
+      } catch { /* ignore */ }
       setChatMessages(prev => [...prev, { role: 'assistant', text: '⚠️ Could not reach AI — check browser console for details.' }]);
     } finally { setChatLoading(false); }
   }
@@ -848,10 +1007,10 @@ export default function NotesPanel({
 
             {/* ── TABS ── */}
             <div className="flex gap-1 border-b pb-2 shrink-0 flex-wrap">
-              {(['notes', 'whatif', 'policyfit', 'history'] as const).map(t => (
+              {(['notes', 'whatif', 'history'] as const).map(t => (
                 <button key={t} onClick={() => setTab(t)}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${tab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
-                  {t === 'notes' ? 'Notes' : t === 'whatif' ? 'What-If' : t === 'policyfit' ? 'Policy Fit' : `History (${savedNotes.length})`}
+                  {t === 'notes' ? 'Notes' : t === 'whatif' ? 'What-If' : `History (${savedNotes.length})`}
                 </button>
               ))}
             </div>
@@ -918,7 +1077,7 @@ export default function NotesPanel({
                 </div>
                 <div className="flex gap-2">
                   <input className="flex-1 text-xs border border-input rounded-md px-3 py-2 bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                    placeholder="e.g. What if salary increases by 5,000?"
+                    placeholder="Ask anything — bank fit, policy, restructuring, missing info…"
                     value={chatInput} onChange={e => setChatInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
                     disabled={chatLoading} />
@@ -926,26 +1085,11 @@ export default function NotesPanel({
                     <Send className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-                <p className="text-[10px] text-muted-foreground">AI has live access to this case — ask anything about eligibility or scenarios.</p>
+                <p className="text-[10px] text-muted-foreground">Ask about affordability, bank fit, policy, documents, or restructuring.</p>
               </div>
             )}
 
-            {/* ── POLICY FIT TAB ── */}
-            {tab === 'policyfit' && (
-              <PolicyFitChatPanel
-                caseFacts={policyFitCaseFacts ?? {
-                  segment: '',
-                  employmentType: '',
-                  totalIncome: whatIfContext.totalIncome,
-                  totalLiabilities: whatIfContext.totalLiabilities,
-                  requestedLoanAmount: whatIfContext.loanAmount,
-                  stressRate: whatIfContext.stressRate,
-                  tenorMonths: whatIfContext.tenorMonths,
-                  currentDbr: whatIfContext.currentDbr,
-                }}
-                availableBanks={policyFitBanks ?? [...whatIfContext.eligibleBanks, ...whatIfContext.ineligibleBanks]}
-              />
-            )}
+            {/* Policy Fit tab removed — its capabilities are now part of the What-If chat. */}
 
             {/* ── HISTORY TAB ── */}
             {tab === 'history' && (
