@@ -1189,6 +1189,34 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
               bankResults,
               liabilityFields: engineLiabilityFields,
             }}
+            policyFitBanks={bankResults.map(r => r.bank.bankName)}
+            policyFitCaseFacts={{
+              segment: resolvedSegment || '',
+              employmentType: empType || '',
+              transactionType: txnType,
+              requestedLoanAmount: loanAmount,
+              propertyValue,
+              requestedLtv: ltv,
+              totalIncome,
+              totalLiabilities,
+              currentDbr: totalIncome > 0
+                ? ((calculateStressEMI(loanAmount, stressRate, effectiveTenor) + totalLiabilities) / totalIncome) * 100
+                : 0,
+              stressRate,
+              tenorMonths: effectiveTenor,
+              losMonths: tier2.lengthOfServiceMonths ?? undefined,
+              lobMonths: tier2.lengthOfBusinessMonths ?? seInfo.lengthOfBusinessMonths ?? undefined,
+              auditAvailable: seInfo.docType === 'full_doc' ? true : seInfo.docType === 'low_doc' ? false : null,
+              vatAvailable: null,
+              dab: null,
+              cto: null,
+              rentalIncome: incomeFields.filter(f => /rental/i.test(f.income_type)).reduce((s, f) => s + (Number(f.amount) || 0), 0) || null,
+              bonusIncome: incomeFields.filter(f => /bonus/i.test(f.income_type)).reduce((s, f) => s + (Number(f.amount) || 0), 0) || null,
+              commissionIncome: incomeFields.filter(f => /commission/i.test(f.income_type)).reduce((s, f) => s + (Number(f.amount) || 0), 0) || null,
+              nationality: nationality || null,
+              countryOfResidence: nrInfo.countryOfResidence || null,
+              coApplicantStructure: coBorrowers.length > 0 ? `${coBorrowers.length} co-borrower${coBorrowers.length === 1 ? '' : 's'}` : null,
+            }}
           />
         </div>
 
