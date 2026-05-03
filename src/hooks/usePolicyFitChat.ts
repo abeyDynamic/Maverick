@@ -27,10 +27,13 @@ export function usePolicyFitChat({ caseFacts, availableBanks = [] }: UsePolicyFi
       setLoading(true);
       setError(null);
       try {
-        const parsed = parsePolicyFitIntent(message, availableBanks);
+        const safeMessage = typeof message === 'string' ? message : '';
+        const safeAvailableBanks = Array.isArray(availableBanks) ? availableBanks : [];
+        const safeCaseFacts: any = caseFacts ?? {};
+        const parsed = parsePolicyFitIntent(safeMessage, safeAvailableBanks);
 
-        const segment = normalizePolicySegment(caseFacts.segment);
-        const employmentType = normalizePolicyEmployment(caseFacts.employmentType);
+        const segment = normalizePolicySegment(safeCaseFacts.segment);
+        const employmentType = normalizePolicyEmployment(safeCaseFacts.employmentType);
 
         let query = (supabase as any)
           .from('policy_search_view')
