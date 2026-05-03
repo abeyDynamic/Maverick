@@ -1077,7 +1077,7 @@ export default function NotesPanel({
                 </div>
                 <div className="flex gap-2">
                   <input className="flex-1 text-xs border border-input rounded-md px-3 py-2 bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                    placeholder="e.g. What if salary increases by 5,000?"
+                    placeholder="Ask anything — bank fit, policy, restructuring, missing info…"
                     value={chatInput} onChange={e => setChatInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
                     disabled={chatLoading} />
@@ -1085,7 +1085,7 @@ export default function NotesPanel({
                     <Send className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-                <p className="text-[10px] text-muted-foreground">AI has live access to this case — ask anything about eligibility or scenarios.</p>
+                <p className="text-[10px] text-muted-foreground">Ask about affordability, bank fit, policy, documents, or restructuring.</p>
               </div>
             )}
 
