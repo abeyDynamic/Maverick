@@ -584,9 +584,10 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
     }
   }
 
-  // Debounced auto-save — only fires if case already has an ID (never auto-creates)
+  // Debounced auto-save — only fires if case already has an ID AND state has hydrated.
   const triggerAutoSave = useCallback(() => {
     if (!currentAppIdRef.current) return;
+    if (!hasHydratedRef.current) return;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(() => {
       performSave(true);
