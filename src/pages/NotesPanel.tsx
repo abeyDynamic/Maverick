@@ -409,6 +409,8 @@ function QualCard({ extracted, onUpdate, onApply, onDiscard, stressRate, tenorMo
     extracted.client_name && { label: 'Name', value: extracted.client_name },
     extracted.segment && { label: 'Segment', value: extracted.segment.replace('_', ' ') },
     extracted.nationality && { label: 'Nationality', value: extracted.nationality },
+    extracted.dob && { label: 'DOB', value: extracted.dob },
+    extracted.employment_type && { label: 'Employment', value: extracted.employment_type.replace('_', ' ') },
     extracted.emirate && { label: 'Emirate', value: extracted.emirate.replace('_', ' ') },
     extracted.property_value && { label: 'Property', value: `AED ${formatCurrency(extracted.property_value)}` },
     extracted.loan_amount && { label: 'Loan', value: `AED ${formatCurrency(extracted.loan_amount)}` },
