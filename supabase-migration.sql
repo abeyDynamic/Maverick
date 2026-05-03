@@ -334,3 +334,17 @@ INSERT INTO public.banks (bank_name, short_code, base_stress_rate, stress_eibor_
   ('DIB', 'dib', 0.0737, '3m', 250000, 10000, 0.50),
   ('HSBC', 'hsbc', 0.0695, '3m', 500000, 30000, 0.50),
   ('RAK Bank', 'rak', 0.0724, '3m', 350000, 15000, 0.50);
+
+-- ============================================================
+-- 2026-05 migration: ensure property_details has all columns
+-- the application writes. Idempotent.
+-- ============================================================
+ALTER TABLE public.property_details ADD COLUMN IF NOT EXISTS is_difc boolean DEFAULT false;
+ALTER TABLE public.property_details ADD COLUMN IF NOT EXISTS is_al_ain boolean DEFAULT false;
+ALTER TABLE public.property_details ADD COLUMN IF NOT EXISTS salary_transfer boolean;
+ALTER TABLE public.property_details ADD COLUMN IF NOT EXISTS property_type text;
+ALTER TABLE public.property_details ADD COLUMN IF NOT EXISTS purpose text;
+ALTER TABLE public.property_details ADD COLUMN IF NOT EXISTS loan_type_preference text DEFAULT 'best';
+-- Enforce one property row per applicant (delete-then-insert pattern needs this).
+CREATE UNIQUE INDEX IF NOT EXISTS property_details_applicant_id_unique
+  ON public.property_details(applicant_id);
