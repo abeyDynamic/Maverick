@@ -34,8 +34,8 @@ export function usePolicyFitChat({ caseFacts, availableBanks = [] }: UsePolicyFi
         let from = 0;
         const all: PolicySearchRow[] = [];
         // base query — filter server-side by segment + employment + bank when possible
-        const segNorm = (caseFacts.segment ?? '').trim();
-        const empNorm = (caseFacts.employmentType ?? '').trim();
+        const segNorm = normalizePolicySegment(caseFacts.segment);
+        const empNorm = normalizePolicyEmployment(caseFacts.employmentType);
 
         // Use 'in' filter for selected banks; otherwise no bank filter
         // eslint-disable-next-line no-constant-condition
