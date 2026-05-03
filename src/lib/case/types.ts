@@ -59,6 +59,26 @@ export interface CaseApplicant {
   segment: QualSegment;
   selfEmployedInfo?: SelfEmployedInfo;
   nonResidentInfo?: NonResidentInfo;
+
+  // Tier 2 — Policy facts (optional, captured for bank-specific eligibility)
+  lengthOfServiceMonths?: number | null;
+  lengthOfBusinessMonths?: number | null;
+  aecbScore?: number | null;
+  salaryCreditsCount?: number | null;
+  probationConfirmed?: boolean | null;
+  employerCategory?: string | null;
+  visaStatus?: string | null;
+  countryOfIncome?: string | null;
+  foreignBureauAvailable?: boolean | null;
+  foreignBureauScore?: number | null;
+  currency?: string | null;
+
+  // Contact details
+  phone?: string | null;
+  email?: string | null;
+  alternatePhone?: string | null;
+  address?: string | null;
+  communicationNotes?: string | null;
 }
 
 export interface CaseProperty {

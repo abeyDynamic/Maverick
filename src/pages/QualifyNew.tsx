@@ -27,6 +27,7 @@ import DebugPanel from '@/components/qualify/DebugPanel';
 import SegmentSelector from '@/components/qualify/SegmentSelector';
 import NotesPanel, { type ExtractionResult, type WhatIfContext } from '@/components/qualify/NotesPanel';
 import SelfEmployedSection from '@/components/qualify/SelfEmployedSection';
+import Tier2ProfileAccordion, { type Tier2Data } from '@/components/qualify/Tier2ProfileAccordion';
 
 import NonResidentSection from '@/components/qualify/NonResidentSection';
 import {
@@ -177,6 +178,26 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   const [ageInput, setAgeInput] = useState<string>('');
   const [empType, setEmpType] = useState('');
 
+  // Tier 2 — Policy facts and contact details
+  const [tier2, setTier2] = useState<Tier2Data>({
+    lengthOfServiceMonths: null,
+    lengthOfBusinessMonths: null,
+    aecbScore: null,
+    salaryCreditsCount: null,
+    probationConfirmed: null,
+    employerCategory: null,
+    visaStatus: null,
+    countryOfIncome: null,
+    foreignBureauAvailable: null,
+    foreignBureauScore: null,
+    currency: 'AED',
+    phone: null,
+    email: null,
+    alternatePhone: null,
+    address: null,
+    communicationNotes: null,
+  });
+
   // Section 2 — Property
   const [propertyValue, setPropertyValue] = useState(0);
   const [ltv, setLtv] = useState(80);
@@ -235,6 +256,24 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
             employmentTypeNR: app.nr_employment_type ?? 'salaried',
           });
         }
+        setTier2({
+          lengthOfServiceMonths: app.length_of_service_months ?? null,
+          lengthOfBusinessMonths: app.length_of_business_months ?? null,
+          aecbScore: app.aecb_score ?? null,
+          salaryCreditsCount: app.salary_credits_count ?? null,
+          probationConfirmed: app.probation_confirmed ?? null,
+          employerCategory: app.employer_category ?? null,
+          visaStatus: app.visa_status ?? null,
+          countryOfIncome: app.country_of_income ?? null,
+          foreignBureauAvailable: app.foreign_bureau_available ?? null,
+          foreignBureauScore: app.foreign_bureau_score ?? null,
+          currency: app.currency ?? 'AED',
+          phone: app.phone ?? null,
+          email: app.email ?? null,
+          alternatePhone: app.alternate_phone ?? null,
+          address: app.address ?? null,
+          communicationNotes: app.communication_notes ?? null,
+        });
       }
 
       if (prop) {
@@ -566,6 +605,22 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
           segment: resolvedSeg,
           selfEmployedInfo: resolvedSeg === 'self_employed' ? seInfo : undefined,
           nonResidentInfo: resolvedSeg === 'non_resident' ? nrInfo : undefined,
+          lengthOfServiceMonths: tier2.lengthOfServiceMonths,
+          lengthOfBusinessMonths: tier2.lengthOfBusinessMonths,
+          aecbScore: tier2.aecbScore,
+          salaryCreditsCount: tier2.salaryCreditsCount,
+          probationConfirmed: tier2.probationConfirmed,
+          employerCategory: tier2.employerCategory,
+          visaStatus: tier2.visaStatus,
+          countryOfIncome: tier2.countryOfIncome,
+          foreignBureauAvailable: tier2.foreignBureauAvailable,
+          foreignBureauScore: tier2.foreignBureauScore,
+          currency: tier2.currency,
+          phone: tier2.phone,
+          email: tier2.email,
+          alternatePhone: tier2.alternatePhone,
+          address: tier2.address,
+          communicationNotes: tier2.communicationNotes,
         },
         property: {
           propertyValue, loanAmount, ltv, emirate, isDIFC, isAlAin,
@@ -625,7 +680,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   }, [
     clientName, residency, nationality, dob, empType, propertyValue, loanAmount, ltv,
     emirate, txnType, salaryTransfer, propertyType, purpose, tenorMonths, nominalRate,
-    stressRate, engineIncomeFields, engineLiabilityFields, engineCoBorrowers,
+    stressRate, engineIncomeFields, engineLiabilityFields, engineCoBorrowers, tier2,
   ]);
 
   // handleSaveForNotes — used by NotesPanel to create a case before attaching a note
@@ -1034,6 +1089,9 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
         {/* COLUMN 3 — Notes + What-If (30%) */}
         <div className="w-[30%] bg-background flex flex-col min-h-0">
+          <div className="p-3 border-b shrink-0">
+            <Tier2ProfileAccordion data={tier2} segment={segment || ''} onChange={setTier2} />
+          </div>
           <NotesPanel
             embedded
             applicantId={currentAppIdRef.current || editApplicantId}

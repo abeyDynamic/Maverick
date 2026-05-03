@@ -169,6 +169,22 @@ export async function saveQualificationSnapshot(params: SaveParams): Promise<str
     nr_income_source_country: applicant.nonResidentInfo?.incomeSourceCountry || null,
     nr_dab_required: applicant.nonResidentInfo?.dabRequired ?? null,
     nr_employment_type: applicant.nonResidentInfo?.employmentTypeNR || null,
+    length_of_service_months: nullableNum(applicant.lengthOfServiceMonths),
+    length_of_business_months: nullableNum(applicant.lengthOfBusinessMonths),
+    aecb_score: nullableNum(applicant.aecbScore),
+    salary_credits_count: nullableNum(applicant.salaryCreditsCount),
+    probation_confirmed: applicant.probationConfirmed ?? null,
+    employer_category: applicant.employerCategory || null,
+    visa_status: applicant.visaStatus || null,
+    country_of_income: applicant.countryOfIncome || null,
+    foreign_bureau_available: applicant.foreignBureauAvailable ?? null,
+    foreign_bureau_score: nullableNum(applicant.foreignBureauScore),
+    currency: applicant.currency || 'AED',
+    phone: applicant.phone || null,
+    email: applicant.email || null,
+    alternate_phone: applicant.alternatePhone || null,
+    address: applicant.address || null,
+    communication_notes: applicant.communicationNotes || null,
   };
 
   let appId: string;
