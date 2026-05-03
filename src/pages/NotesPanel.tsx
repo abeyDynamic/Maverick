@@ -148,6 +148,7 @@ function ruleBasedExtract(notes: string): ExtractionResult {
       foreign_bureau_score: null, currency: null,
     },
     contact: { phone: null, email: null, alternate_phone: null, address: null },
+    self_employed: null,
     confidence: { personal: 0, property: 0, income: 0, liabilities: 0 }, unclear: [],
   };
 
