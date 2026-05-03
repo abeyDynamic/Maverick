@@ -1089,6 +1089,9 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
 
         {/* COLUMN 3 — Notes + What-If (30%) */}
         <div className="w-[30%] bg-background flex flex-col min-h-0">
+          <div className="p-3 border-b shrink-0">
+            <Tier2ProfileAccordion data={tier2} segment={segment || ''} onChange={setTier2} />
+          </div>
           <NotesPanel
             embedded
             applicantId={currentAppIdRef.current || editApplicantId}
