@@ -121,3 +121,20 @@ function slimBank(b: any) {
     topMissing: (b.missingInputs ?? []).slice(0, 3).map((c: any) => ({ attr: c.canonicalAttribute, reason: c.reason })),
   };
 }
+
+function normalizePolicySegment(segment?: string): string | undefined {
+  if (!segment) return undefined;
+  const value = segment.toLowerCase();
+  if (value.includes('non')) return 'Non-Resident';
+  if (value.includes('resident')) return 'Resident';
+  return undefined;
+}
+
+function normalizePolicyEmployment(employmentType?: string): string | undefined {
+  if (!employmentType) return undefined;
+  const value = employmentType.toLowerCase();
+  if (value.includes('self')) return 'Self Employed';
+  if (value.includes('salary') || value.includes('salaried')) return 'Salaried';
+  if (value.includes('mixed')) return 'Mixed';
+  return undefined;
+}
