@@ -680,7 +680,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
   }, [
     clientName, residency, nationality, dob, empType, propertyValue, loanAmount, ltv,
     emirate, txnType, salaryTransfer, propertyType, purpose, tenorMonths, nominalRate,
-    stressRate, engineIncomeFields, engineLiabilityFields, engineCoBorrowers,
+    stressRate, engineIncomeFields, engineLiabilityFields, engineCoBorrowers, tier2,
   ]);
 
   // handleSaveForNotes — used by NotesPanel to create a case before attaching a note
