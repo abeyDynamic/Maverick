@@ -128,17 +128,21 @@ function slimBank(b: any) {
   };
 }
 
-function normalizePolicySegment(segment?: string): string | undefined {
-  if (!segment) return undefined;
-  const value = segment.toLowerCase();
+function safeLower(value: unknown): string {
+  return typeof value === 'string' ? value.toLowerCase() : '';
+}
+
+function normalizePolicySegment(segment?: unknown): string | undefined {
+  const value = safeLower(segment);
+  if (!value) return undefined;
   if (value.includes('non')) return 'Non-Resident';
   if (value.includes('resident')) return 'Resident';
   return undefined;
 }
 
-function normalizePolicyEmployment(employmentType?: string): string | undefined {
-  if (!employmentType) return undefined;
-  const value = employmentType.toLowerCase();
+function normalizePolicyEmployment(employmentType?: unknown): string | undefined {
+  const value = safeLower(employmentType);
+  if (!value) return undefined;
   if (value.includes('self')) return 'Self Employed';
   if (value.includes('salary') || value.includes('salaried')) return 'Salaried';
   if (value.includes('mixed')) return 'Mixed';
