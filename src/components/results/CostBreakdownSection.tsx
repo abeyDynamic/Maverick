@@ -211,7 +211,7 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
 function SectionHeader({ label, colCount }: { label: string; colCount: number }) {
   return (
     <tr className="bg-[hsl(220,18%,97%)] border-t border-border">
-      <td colSpan={colCount + 1} className="px-4 py-2">
+      <td colSpan={colCount + 1} className="px-4 py-2 sticky left-0 bg-[hsl(220,18%,97%)]">
         <span className="section-label">{label}</span>
       </td>
     </tr>
@@ -228,7 +228,7 @@ function Row({ label, costs, getValue, getSub, bold, highlight }: {
 }) {
   return (
     <tr className={cn('border-t border-border/50', highlight && 'bg-[hsl(174,85%,32%,0.03)]')}>
-      <td className={cn('px-4 py-2.5 text-[12.5px] text-muted-foreground', bold && 'font-semibold text-foreground')}>
+      <td className={cn('px-4 py-2.5 text-[12.5px] text-muted-foreground sticky left-0 bg-background', bold && 'font-semibold text-foreground')}>
         {label}
       </td>
       {costs.map(c => (
