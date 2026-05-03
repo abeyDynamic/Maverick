@@ -22,8 +22,12 @@ const BANK_ALIASES: Record<string, string[]> = {
   'UAB': ['uab', 'united arab bank'],
 };
 
-function normalize(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+function safeLower(value: unknown): string {
+  return typeof value === 'string' ? value.toLowerCase() : '';
+}
+
+function normalize(s: unknown): string {
+  return safeLower(s).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 export function parsePolicyFitIntent(
