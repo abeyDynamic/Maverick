@@ -34,8 +34,8 @@ export function usePolicyFitChat({ caseFacts, availableBanks = [] }: UsePolicyFi
         let from = 0;
         const all: PolicySearchRow[] = [];
         // base query — filter server-side by segment + employment + bank when possible
-        const segNorm = (caseFacts.segment ?? '').trim();
-        const empNorm = (caseFacts.employmentType ?? '').trim();
+        const segNorm = normalizePolicySegment(caseFacts.segment);
+        const empNorm = normalizePolicyEmployment(caseFacts.employmentType);
 
         // Use 'in' filter for selected banks; otherwise no bank filter
         // eslint-disable-next-line no-constant-condition
@@ -120,4 +120,21 @@ function slimBank(b: any) {
     topFailures: (b.failedChecks ?? []).slice(0, 3).map((c: any) => ({ attr: c.canonicalAttribute, reason: c.reason })),
     topMissing: (b.missingInputs ?? []).slice(0, 3).map((c: any) => ({ attr: c.canonicalAttribute, reason: c.reason })),
   };
+}
+
+function normalizePolicySegment(segment?: string): string | undefined {
+  if (!segment) return undefined;
+  const value = segment.toLowerCase();
+  if (value.includes('non')) return 'Non-Resident';
+  if (value.includes('resident')) return 'Resident';
+  return undefined;
+}
+
+function normalizePolicyEmployment(employmentType?: string): string | undefined {
+  if (!employmentType) return undefined;
+  const value = employmentType.toLowerCase();
+  if (value.includes('self')) return 'Self Employed';
+  if (value.includes('salary') || value.includes('salaried')) return 'Salaried';
+  if (value.includes('mixed')) return 'Mixed';
+  return undefined;
 }
