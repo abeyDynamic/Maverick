@@ -196,11 +196,17 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     result.residency = 'resident_expat'; result.segment = 'resident_salaried'; result.confidence.personal += 0.2;
   }
 
-  // Employment type
-  if (text.includes('self employed') || text.includes('self-employed') || text.includes('business owner') || text.includes('owns a company') || text.includes('owns the company')) {
-    result.employment_type = 'self_employed'; result.segment = 'self_employed'; result.confidence.personal += 0.3;
+  // Employment type — does NOT change segment (segment is residency-based)
+  if (text.includes('self employed') || text.includes('self-employed') || text.includes('business owner') || text.includes('owns a company') || text.includes('owns the company') || text.includes('100% owner') || text.includes('sole owner') || text.includes('sole proprietor')) {
+    result.employment_type = 'self_employed'; result.confidence.personal += 0.3;
   } else if (text.includes('salaried') || text.includes('works at') || text.includes('employed at') || text.includes('in the uae')) {
-    result.employment_type = 'salaried'; if (!result.segment) result.segment = 'resident_salaried'; result.confidence.personal += 0.2;
+    result.employment_type = 'salaried'; result.confidence.personal += 0.2;
+  }
+  // Default segment from residency only
+  if (!result.segment) {
+    if (result.residency === 'non_resident') result.segment = 'non_resident';
+    else if (result.employment_type === 'self_employed') result.segment = 'self_employed';
+    else if (result.residency) result.segment = 'resident_salaried';
   }
 
   // DOB
