@@ -405,14 +405,30 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     }
   }
 
-  const ccMatches = [...notes.matchAll(/(?:credit\s+card|\bcc\b)\s*(?:\d)?\s*(?:limit\s+)?(?:of\s+|is\s+)?(?:aed\s*)?([\d.,]+[km]?)/gi)];
-  ccMatches.slice(0, 3).forEach((m, i) => {
-    const val = parseAmount(m[1]);
-    if (val) {
-      result.liability_fields.push({ liability_type: `Credit Card ${i + 1} Limit`, amount: 0, credit_card_limit: val, recurrence: 'monthly', closed_before_application: false });
+  // Credit cards — limit and/or DBR amount
+  const ccDbr = notes.match(/credit\s+card\s+(?:dbr|monthly|min(?:imum)?)\s+(?:amount|payment)?\s*[:=-]?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
+  const ccLimit = notes.match(/credit\s+card\s+limit\s*[:=-]?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
+  if (ccLimit) {
+    const v = parseAmount(ccLimit[1]);
+    if (v) {
+      result.liability_fields.push({ liability_type: 'Credit Card 1 Limit', amount: 0, credit_card_limit: v, recurrence: 'monthly', closed_before_application: false });
       result.confidence.liabilities = Math.min(result.confidence.liabilities + 0.3, 1);
     }
-  });
+  } else {
+    const ccMatches = [...notes.matchAll(/(?:credit\s+card|\bcc\b)\s*(?:\d)?\s*(?:limit\s+)?(?:of\s+|is\s+)?(?:aed\s*)?([\d.,]+[km]?)/gi)];
+    ccMatches.slice(0, 3).forEach((m, i) => {
+      const val = parseAmount(m[1]);
+      if (val) {
+        result.liability_fields.push({ liability_type: `Credit Card ${i + 1} Limit`, amount: 0, credit_card_limit: val, recurrence: 'monthly', closed_before_application: false });
+        result.confidence.liabilities = Math.min(result.confidence.liabilities + 0.3, 1);
+      }
+    });
+  }
+  if (ccDbr) {
+    const v = parseAmount(ccDbr[1]) ?? 0;
+    // Stash on first credit card row as additional info; surface in evidence too.
+    result.income_evidence!.push({ label: 'Credit card DBR amount', amount: v, unit: 'monthly', note: 'Used in DBR (5% of limit by default unless adviser overrides)' });
+  }
 
   const homeLoanMatch = notes.match(/(?:existing\s+mortgage|home\s+loan|existing\s+loan)\s+(?:emi|of|is)?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
   if (homeLoanMatch) {
@@ -420,6 +436,21 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     if (val) {
       result.liability_fields.push({ liability_type: 'Home Loan Existing EMI 1', amount: val, credit_card_limit: 0, recurrence: 'monthly', closed_before_application: false });
       result.confidence.liabilities = Math.min(result.confidence.liabilities + 0.3, 1);
+    }
+  }
+
+  // Company loan EMI — DO NOT auto-include in DBR. Mark as pending adviser confirmation.
+  const compLoan = notes.match(/company\s+loan\s+(?:emi|of|is)?\s*[:=-]?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
+  if (compLoan) {
+    const val = parseAmount(compLoan[1]);
+    if (val) {
+      result.liabilities_pending!.push({
+        liability_type: 'Company Loan EMI',
+        amount: val,
+        recurrence: 'monthly',
+        reason: 'Bank treatment depends on policy — confirm before adding to DBR.',
+      });
+      result.policy_questions!.push(`Should company loan AED ${val.toLocaleString()} be included in DBR obligations?`);
     }
   }
 
