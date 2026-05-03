@@ -691,9 +691,12 @@ async function retrievePolicyContext(
   availableBanks?: string[],
 ): Promise<{ rows: any[]; summary: string }> {
   try {
-    const parsed = parsePolicyFitIntent(message, availableBanks ?? []);
-    const segment = normSegmentForPolicy(caseFacts?.segment);
-    const employment = normEmploymentForPolicy(caseFacts?.employmentType);
+    const safeMessage = typeof message === 'string' ? message : '';
+    const safeAvailableBanks = Array.isArray(availableBanks) ? availableBanks : [];
+    const safeCaseFacts: any = caseFacts ?? {};
+    const parsed = parsePolicyFitIntent(safeMessage, safeAvailableBanks);
+    const segment = normSegmentForPolicy(safeCaseFacts.segment);
+    const employment = normEmploymentForPolicy(safeCaseFacts.employmentType);
 
     let q: any = (supabase as any)
       .from('policy_search_view')
