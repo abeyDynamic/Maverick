@@ -32,9 +32,11 @@ export interface ExtractionResult {
   nationality: string | null;
   dob: string | null;
   employment_type: string | null;
+  employer?: string | null;
   property_value: number | null;
   loan_amount: number | null;
   ltv: number | null;
+  tenor_months: number | null;
   emirate: string | null;
   transaction_type: string | null;
   property_type: string | null;
@@ -42,6 +44,25 @@ export interface ExtractionResult {
   salary_transfer: boolean | null;
   income_fields: Array<{ income_type: string; amount: number; percent_considered: number; recurrence: string }>;
   liability_fields: Array<{ liability_type: string; amount: number; credit_card_limit: number; recurrence: string; closed_before_application: boolean }>;
+  tier2: {
+    length_of_service_months: number | null;
+    length_of_business_months: number | null;
+    aecb_score: number | null;
+    salary_credits_count: number | null;
+    probation_confirmed: boolean | null;
+    employer_category: string | null;
+    visa_status: string | null;
+    country_of_income: string | null;
+    foreign_bureau_available: boolean | null;
+    foreign_bureau_score: number | null;
+    currency: string | null;
+  };
+  contact: {
+    phone: string | null;
+    email: string | null;
+    alternate_phone: string | null;
+    address: string | null;
+  };
   confidence: { personal: number; property: number; income: number; liabilities: number };
   unclear: string[];
 }
