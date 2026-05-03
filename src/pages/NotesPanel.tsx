@@ -15,6 +15,8 @@ import { COUNTRIES, EMIRATES, calculateStressEMI, formatCurrency } from '@/lib/m
 import { buildWhatIfAnalysis } from '@/lib/case/stage1-engine';
 import type { CaseBankResult } from '@/lib/case/stage1-engine';
 import type { CaseLiabilityField } from '@/lib/case/types';
+import PolicyFitChatPanel from '@/components/qualify/PolicyFitChatPanel';
+import type { PolicyFitCaseFacts } from '@/lib/policies/policyFitTypes';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -91,6 +93,8 @@ interface NotesPanelProps {
   onRequestSave?: () => Promise<string | undefined>;
   whatIfContext: WhatIfContext;
   embedded?: boolean;
+  policyFitCaseFacts?: PolicyFitCaseFacts;
+  policyFitBanks?: string[];
 }
 
 // ── Missing field definitions ──────────────────────────────────────────────
@@ -590,11 +594,13 @@ export default function NotesPanel({
   onRequestSave,
   whatIfContext,
   embedded = false,
+  policyFitCaseFacts,
+  policyFitBanks,
 }: NotesPanelProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [minimised, setMinimised] = useState(false);
-  const [tab, setTab] = useState<'notes' | 'whatif' | 'history'>('notes');
+  const [tab, setTab] = useState<'notes' | 'whatif' | 'policyfit' | 'history'>('notes');
   const [draft, setDraft] = useState('');
   const [sessionLabel, setSessionLabel] = useState('');
   const [savedNotes, setSavedNotes] = useState<ClientNote[]>([]);
@@ -841,11 +847,11 @@ export default function NotesPanel({
             )}
 
             {/* ── TABS ── */}
-            <div className="flex gap-1 border-b pb-2 shrink-0">
-              {(['notes', 'whatif', 'history'] as const).map(t => (
+            <div className="flex gap-1 border-b pb-2 shrink-0 flex-wrap">
+              {(['notes', 'whatif', 'policyfit', 'history'] as const).map(t => (
                 <button key={t} onClick={() => setTab(t)}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${tab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
-                  {t === 'notes' ? 'Notes' : t === 'whatif' ? 'What-If' : `History (${savedNotes.length})`}
+                  {t === 'notes' ? 'Notes' : t === 'whatif' ? 'What-If' : t === 'policyfit' ? 'Policy Fit' : `History (${savedNotes.length})`}
                 </button>
               ))}
             </div>
@@ -922,6 +928,23 @@ export default function NotesPanel({
                 </div>
                 <p className="text-[10px] text-muted-foreground">AI has live access to this case — ask anything about eligibility or scenarios.</p>
               </div>
+            )}
+
+            {/* ── POLICY FIT TAB ── */}
+            {tab === 'policyfit' && (
+              <PolicyFitChatPanel
+                caseFacts={policyFitCaseFacts ?? {
+                  segment: '',
+                  employmentType: '',
+                  totalIncome: whatIfContext.totalIncome,
+                  totalLiabilities: whatIfContext.totalLiabilities,
+                  requestedLoanAmount: whatIfContext.loanAmount,
+                  stressRate: whatIfContext.stressRate,
+                  tenorMonths: whatIfContext.tenorMonths,
+                  currentDbr: whatIfContext.currentDbr,
+                }}
+                availableBanks={policyFitBanks ?? [...whatIfContext.eligibleBanks, ...whatIfContext.ineligibleBanks]}
+              />
             )}
 
             {/* ── HISTORY TAB ── */}
