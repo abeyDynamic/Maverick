@@ -646,17 +646,21 @@ const POLICY_CATEGORIES = [
   'property', 'document', 'tat_validity', 'fee', 'note',
 ];
 
-function normSegmentForPolicy(s?: string): string | undefined {
-  if (!s) return undefined;
-  const v = s.toLowerCase();
+function safeLower(value: unknown): string {
+  return typeof value === 'string' ? value.toLowerCase() : '';
+}
+
+function normSegmentForPolicy(s?: unknown): string | undefined {
+  const v = safeLower(s);
+  if (!v) return undefined;
   if (v.includes('non')) return 'Non-Resident';
   if (v.includes('resident') || v.includes('salaried') || v.includes('self')) return 'Resident';
   return undefined;
 }
 
-function normEmploymentForPolicy(s?: string): string | undefined {
-  if (!s) return undefined;
-  const v = s.toLowerCase();
+function normEmploymentForPolicy(s?: unknown): string | undefined {
+  const v = safeLower(s);
+  if (!v) return undefined;
   if (v.includes('self')) return 'Self Employed';
   if (v.includes('salar')) return 'Salaried';
   if (v.includes('mixed')) return 'Mixed';
@@ -665,18 +669,21 @@ function normEmploymentForPolicy(s?: string): string | undefined {
 
 function scorePolicyRow(row: any, message: string, focusAreas: string[]): number {
   let score = 0;
-  const text = `${row.canonical_attribute ?? ''} ${row.raw_attribute ?? ''} ${row.attribute_description ?? ''} ${row.value ?? ''}`.toLowerCase();
-  const m = message.toLowerCase();
-  for (const f of focusAreas) if (text.includes(f.toLowerCase())) score += 4;
+  const safeRow = row ?? {};
+  const text = safeLower(`${safeRow.canonical_attribute ?? ''} ${safeRow.raw_attribute ?? ''} ${safeRow.attribute_description ?? ''} ${safeRow.value ?? ''}`);
+  const m = safeLower(message);
+  const safeFocus = Array.isArray(focusAreas) ? focusAreas : [];
+  for (const f of safeFocus) if (text.includes(safeLower(f))) score += 4;
   for (const w of m.split(/\s+/)) {
     if (w.length < 4) continue;
     if (text.includes(w)) score += 1;
   }
-  if (row.ready_for_search) score += 1;
-  if (row.value_status === 'confirmed') score += 1;
-  if (row.value_status === 'unclear') score -= 1;
+  if (safeRow.ready_for_search) score += 1;
+  if (safeRow.value_status === 'confirmed') score += 1;
+  if (safeRow.value_status === 'unclear') score -= 1;
   return score;
 }
+
 
 async function retrievePolicyContext(
   message: string,
