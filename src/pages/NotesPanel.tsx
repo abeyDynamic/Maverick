@@ -72,6 +72,12 @@ export interface ExtractionResult {
     income_route: string | null;   // matches SEIncomeRoute values
     doc_type: 'full_doc' | 'low_doc' | null;
   } | null;
+  /** Supporting financial evidence — NOT applied to DBR by default. */
+  income_evidence?: Array<{ label: string; amount: number; unit: 'monthly' | 'annual' | 'balance'; note?: string }>;
+  /** Liabilities the AI found but that need adviser confirmation before being added to DBR. */
+  liabilities_pending?: Array<{ liability_type: string; amount: number; recurrence: string; reason: string }>;
+  documents_available?: string[];
+  policy_questions?: string[];
   confidence: { personal: number; property: number; income: number; liabilities: number };
   unclear: string[];
 }
