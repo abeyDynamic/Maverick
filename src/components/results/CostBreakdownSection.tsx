@@ -194,6 +194,15 @@ export default function CostBreakdownSection({ bankResults, loanAmount, property
             <Row label={`Fixed Period + Upfront`} costs={costs} getValue={c => formatCurrency(c.grandTotal)} bold highlight />
           </tbody>
         </table>
+        </div>
+        {costs.length > 4 && (
+          <div
+            className="pointer-events-none absolute top-0 right-0 h-full w-12"
+            style={{
+              background: 'linear-gradient(to right, transparent, hsl(var(--background)) 70%)',
+            }}
+          />
+        )}
       </div>
     </div>
   );
