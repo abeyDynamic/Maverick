@@ -848,10 +848,10 @@ export default function NotesPanel({
 
             {/* ── TABS ── */}
             <div className="flex gap-1 border-b pb-2 shrink-0 flex-wrap">
-              {(['notes', 'whatif', 'policyfit', 'history'] as const).map(t => (
+              {(['notes', 'whatif', 'history'] as const).map(t => (
                 <button key={t} onClick={() => setTab(t)}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${tab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
-                  {t === 'notes' ? 'Notes' : t === 'whatif' ? 'What-If' : t === 'policyfit' ? 'Policy Fit' : `History (${savedNotes.length})`}
+                  {t === 'notes' ? 'Notes' : t === 'whatif' ? 'What-If' : `History (${savedNotes.length})`}
                 </button>
               ))}
             </div>
