@@ -299,42 +299,84 @@ function ruleBasedExtract(notes: string): ExtractionResult {
   else if (text.includes('first home') || text.includes('first time buyer') || text.includes('first property')) result.purpose = 'First Home';
   else if (text.includes('second home')) result.purpose = 'Second Home';
 
-  // Income
-  const incomeMap = [
-    { type: 'Basic Salary', patterns: [
+  // ── Income (DBR) — only true monthly income goes into income_fields ──
+  // Everything else (turnover, audited profit, DAB, MCTO) is supporting evidence.
+
+  function pushDbr(type: string, amount: number) {
+    if (!amount || amount <= 0) return;
+    if (result.income_fields.some(f => f.income_type === type)) return;
+    result.income_fields.push({ income_type: type, amount, percent_considered: 100, recurrence: 'monthly' });
+    result.confidence.income = Math.min(result.confidence.income + 0.3, 1);
+  }
+  function pushEvidence(label: string, amount: number, unit: 'monthly' | 'annual' | 'balance', note?: string) {
+    if (!amount || amount <= 0) return;
+    if (result.income_evidence!.some(e => e.label === label)) return;
+    result.income_evidence!.push({ label, amount, unit, note });
+  }
+
+  // 1. Explicit "monthly DBR income estimate"
+  const dbrInc = notes.match(/(?:monthly\s+)?dbr\s+income(?:\s+estimate)?\s*[:=-]?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
+  if (dbrInc) pushDbr('Basic Salary', parseAmount(dbrInc[1]) ?? 0);
+
+  // 2. Salary patterns (only if no DBR estimate already present)
+  if (result.income_fields.length === 0) {
+    const salPatterns = [
       /basic\s+salary\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i,
-      /salary\s+(?:is\s+|of\s+|aed\s+)?([\d.,]+[km]?)/i,
-      /earns?\s+(?:aed\s*)?([\d.,]+[km]?)/i,
-      /income\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i,
-    ]},
-    { type: 'Housing Allowance', patterns: [/housing\s+allowance\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
-    { type: 'Transport Allowance', patterns: [/transport\s+(?:allowance\s+)?(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
-    { type: 'Educational Allowance', patterns: [/(?:education(?:al)?|school)\s+allowance\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
-    { type: 'Bonus Fixed', patterns: [/(?:fixed\s+)?bonus\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
-    { type: 'Bonus Variable', patterns: [/(?:variable|performance)\s+bonus\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
-    { type: 'Commission Variable', patterns: [/commission\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
-    { type: 'Rental Income 1', patterns: [/rental\s+income\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i, /rent\s+(?:received|income|of)\s+(?:aed\s*)?([\d.,]+[km]?)/i] },
-    { type: 'SE Audited Revenue', patterns: [/(?:audited\s+)?revenue\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i, /turnover\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
-    { type: 'SE Personal DAB', patterns: [/(?:personal\s+)?(?:dab|daily\s+average\s+balance)\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
-    { type: 'SE Personal MCTO', patterns: [/(?:personal\s+)?(?:mcto|monthly\s+credit\s+turnover)\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
-    { type: 'SE Company DAB', patterns: [/company\s+(?:dab|daily\s+average\s+balance)\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
-    { type: 'SE Company MCTO', patterns: [/company\s+(?:mcto|monthly\s+credit\s+turnover)\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i] },
-  ];
-  const addedTypes = new Set<string>();
-  for (const { type, patterns } of incomeMap) {
-    if (addedTypes.has(type)) continue;
-    for (const pattern of patterns) {
-      const m = notes.match(pattern);
-      if (m) {
-        const val = parseAmount(m[m.length - 1]);
-        if (val && val > 0) {
-          result.income_fields.push({ income_type: type, amount: val, percent_considered: 100, recurrence: 'monthly' });
-          result.confidence.income = Math.min(result.confidence.income + 0.3, 1);
-          addedTypes.add(type);
-          break;
-        }
-      }
+      /(?:net|monthly)\s+salary\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i,
+      /salary\s+(?:is\s+|of\s+|aed\s+)?([\d.,]+[km]?)\s*(?:\/?\s*mo(?:nth)?|per\s+month)/i,
+      /earns?\s+(?:aed\s*)?([\d.,]+[km]?)\s*(?:\/?\s*mo(?:nth)?|per\s+month)/i,
+    ];
+    for (const p of salPatterns) {
+      const m = notes.match(p);
+      if (m) { pushDbr('Basic Salary', parseAmount(m[1]) ?? 0); break; }
     }
+  }
+
+  // 3. Allowances → DBR
+  const housing = notes.match(/housing\s+allowance\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i);
+  if (housing) pushDbr('Housing Allowance', parseAmount(housing[1]) ?? 0);
+  const transport = notes.match(/transport\s+(?:allowance\s+)?(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)/i);
+  if (transport) pushDbr('Transport Allowance', parseAmount(transport[1]) ?? 0);
+
+  // 4. Rental income → DBR (if explicitly /month or "rental income")
+  const rental = notes.match(/rental\s+income\s+(?:is\s+|of\s+)?(?:aed\s*)?([\d.,]+[km]?)\s*(?:\/?\s*mo(?:nth)?|per\s+month)?/i);
+  if (rental) pushDbr('Rental Income 1', parseAmount(rental[1]) ?? 0);
+
+  // 5. Supporting evidence (NOT applied to DBR)
+  const turnover = notes.match(/(?:annual\s+)?turnover\s*[:=-]?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
+  if (turnover) pushEvidence('Annual turnover', parseAmount(turnover[1]) ?? 0, 'annual');
+
+  const audited = notes.match(/(?:latest\s+)?audited\s+(?:net\s+)?profit\s*[:=-]?\s*(?:aed\s*)?([\d.,]+[km]?)/i)
+    || notes.match(/audited\s+(?:revenue|financial)s?[^.]{0,40}?(?:aed\s*)?([\d.,]+[km]?)/i);
+  if (audited) pushEvidence('Audited net profit', parseAmount(audited[1]) ?? 0, 'annual');
+
+  const cto = notes.match(/(?:company\s+cto|company\s+turnover|average\s+monthly\s+credits?)\s*[:=-]?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
+  if (cto) pushEvidence('Company CTO (avg monthly credits)', parseAmount(cto[1]) ?? 0, 'monthly');
+
+  const persDab = notes.match(/personal\s+dab\s*[:=-]?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
+  if (persDab) pushEvidence('Personal DAB', parseAmount(persDab[1]) ?? 0, 'balance');
+  const compDab = notes.match(/company\s+dab\s*[:=-]?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
+  if (compDab) pushEvidence('Company DAB', parseAmount(compDab[1]) ?? 0, 'balance');
+
+  const persMcto = notes.match(/personal\s+mcto\s*[:=-]?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
+  if (persMcto) pushEvidence('Personal MCTO', parseAmount(persMcto[1]) ?? 0, 'monthly');
+  const compMcto = notes.match(/company\s+mcto\s*[:=-]?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
+  if (compMcto) pushEvidence('Company MCTO', parseAmount(compMcto[1]) ?? 0, 'monthly');
+
+  // Own-company salary transfer → evidence + question (not auto-applied)
+  const ownSal = notes.match(/own[\s-]?company\s+salary(?:\s+transfer)?\s*[:=-]?\s*(?:aed\s*)?([\d.,]+[km]?)/i);
+  if (ownSal) {
+    pushEvidence('Own-company salary transfer', parseAmount(ownSal[1]) ?? 0, 'monthly', 'Confirm route: salary or business evidence');
+    result.policy_questions!.push('Should own-company salary transfer be treated as salary or business evidence?');
+  }
+
+  // Documents
+  if (/vat\s+(?:return|filing|available)/i.test(notes)) result.documents_available!.push('VAT returns');
+  const auditYears = notes.match(/audited?\s+financials?\s+(?:available\s+)?(?:for\s+)?([\d, ]+(?:and\s+\d{4})?)/i);
+  if (auditYears) result.documents_available!.push(`Audited financials: ${auditYears[1].trim()}`);
+  if (/2024\s+audit\s*(?::|is)?\s*draft/i.test(notes)) {
+    result.documents_available!.push('2024 audit: draft only');
+    result.policy_questions!.push('Is the 2024 audit final or draft only?');
   }
 
   // Liabilities
