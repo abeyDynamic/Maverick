@@ -155,6 +155,10 @@ function ruleBasedExtract(notes: string): ExtractionResult {
     },
     contact: { phone: null, email: null, alternate_phone: null, address: null },
     self_employed: null,
+    income_evidence: [],
+    liabilities_pending: [],
+    documents_available: [],
+    policy_questions: [],
     confidence: { personal: 0, property: 0, income: 0, liabilities: 0 }, unclear: [],
   };
 
