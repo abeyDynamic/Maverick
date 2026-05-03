@@ -874,7 +874,7 @@ export default function NotesPanel({
       // hasn't been updated to the new unified mode yet.
       try {
         const { data } = await supabase.functions.invoke('maverick-ai', {
-          body: { mode: 'whatif', payload: { question: chatMessages[chatMessages.length - 1]?.text ?? '', caseContext: {
+          body: { mode: 'whatif', payload: { question, caseContext: {
             totalIncome: whatIfContext.totalIncome, totalLiabilities: whatIfContext.totalLiabilities,
             loanAmount: whatIfContext.loanAmount, stressRate: whatIfContext.stressRate,
             tenorMonths: whatIfContext.tenorMonths, currentDbr: whatIfContext.currentDbr,
