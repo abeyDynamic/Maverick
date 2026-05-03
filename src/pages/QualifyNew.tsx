@@ -256,6 +256,24 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
             employmentTypeNR: app.nr_employment_type ?? 'salaried',
           });
         }
+        setTier2({
+          lengthOfServiceMonths: app.length_of_service_months ?? null,
+          lengthOfBusinessMonths: app.length_of_business_months ?? null,
+          aecbScore: app.aecb_score ?? null,
+          salaryCreditsCount: app.salary_credits_count ?? null,
+          probationConfirmed: app.probation_confirmed ?? null,
+          employerCategory: app.employer_category ?? null,
+          visaStatus: app.visa_status ?? null,
+          countryOfIncome: app.country_of_income ?? null,
+          foreignBureauAvailable: app.foreign_bureau_available ?? null,
+          foreignBureauScore: app.foreign_bureau_score ?? null,
+          currency: app.currency ?? 'AED',
+          phone: app.phone ?? null,
+          email: app.email ?? null,
+          alternatePhone: app.alternate_phone ?? null,
+          address: app.address ?? null,
+          communicationNotes: app.communication_notes ?? null,
+        });
       }
 
       if (prop) {
