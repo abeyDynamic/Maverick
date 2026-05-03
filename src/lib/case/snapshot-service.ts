@@ -190,14 +190,7 @@ export async function saveQualificationSnapshot(params: SaveParams): Promise<str
   } else {
     const { data: created, error } = await supabase
       .from('applicants')
-      .insert({
-        user_id: userId,
-        full_name: applicant.fullName || null,
-        residency_status: applicant.residencyStatus,
-        nationality: applicant.nationality,
-        date_of_birth: applicant.dateOfBirth ? format(applicant.dateOfBirth, 'yyyy-MM-dd') : null,
-        employment_type: applicant.employmentType || null,
-      } as any)
+      .insert({ user_id: userId, ...applicantPayload } as any)
       .select('id')
       .single();
 
@@ -221,11 +214,6 @@ export async function saveQualificationSnapshot(params: SaveParams): Promise<str
     } as any);
     if (qrErr) console.error('qualification_results insert error:', qrErr);
   }
-
-  // Use explicit null checks — `||` treats numeric 0 as null which loses
-  // legitimate user input.
-  const nullableNum = (v: number | null | undefined): number | null =>
-    v == null || Number.isNaN(v) ? null : v;
 
   const { error: propInsertError } = await supabase.from('property_details').insert({
     applicant_id: appId,
