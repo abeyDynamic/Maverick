@@ -291,6 +291,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         });
         setCoBorrowers(cbs);
       }
+      hasHydratedRef.current = true;
     }
     loadApplicant();
   }, [editApplicantId]);
