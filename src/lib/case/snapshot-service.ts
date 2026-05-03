@@ -200,11 +200,16 @@ export async function saveQualificationSnapshot(params: SaveParams): Promise<str
     if (qrErr) console.error('qualification_results insert error:', qrErr);
   }
 
+  // Use explicit null checks — `||` treats numeric 0 as null which loses
+  // legitimate user input.
+  const nullableNum = (v: number | null | undefined): number | null =>
+    v == null || Number.isNaN(v) ? null : v;
+
   const { error: propInsertError } = await supabase.from('property_details').insert({
     applicant_id: appId,
-    property_value: property.propertyValue || null,
-    loan_amount: property.loanAmount || null,
-    ltv: property.ltv || null,
+    property_value: nullableNum(property.propertyValue),
+    loan_amount: nullableNum(property.loanAmount),
+    ltv: nullableNum(property.ltv),
     emirate: property.emirate,
     is_difc: property.isDIFC,
     is_al_ain: property.isAlAin,
@@ -216,10 +221,13 @@ export async function saveQualificationSnapshot(params: SaveParams): Promise<str
     purpose: property.purpose || null,
     loan_type_preference: property.loanTypePreference,
     preferred_tenor_months: effectiveTenor,
-    nominal_rate: property.nominalRate,
-    stress_rate: property.stressRate,
+    nominal_rate: nullableNum(property.nominalRate),
+    stress_rate: nullableNum(property.stressRate),
   });
-  if (propInsertError) console.error('Property insert error:', propInsertError);
+  if (propInsertError) {
+    console.error('Property insert error:', propInsertError);
+    throw propInsertError;
+  }
 
   if (incomeFields.length > 0) {
     const { error: incError } = await supabase.from('income_fields').insert(
