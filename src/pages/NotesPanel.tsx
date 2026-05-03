@@ -279,12 +279,12 @@ function ruleBasedExtract(notes: string): ExtractionResult {
   if (result.property_value && result.ltv && !result.loan_amount) result.loan_amount = Math.round(result.property_value * result.ltv / 100);
   if (result.property_value && result.loan_amount && !result.ltv) result.ltv = Math.round((result.loan_amount / result.property_value) * 100);
 
-  // Transaction type
-  if (text.includes('resale') || text.includes('secondary market')) result.transaction_type = 'resale';
-  else if (text.includes('off-plan') || text.includes('off plan')) result.transaction_type = 'off_plan';
-  else if (text.includes('handover')) result.transaction_type = 'handover';
+  // Transaction type — be conservative. "handover" only if explicit handover language.
+  if (text.includes('off-plan') || text.includes('off plan')) result.transaction_type = 'off_plan';
   else if (text.includes('buyout') || text.includes('buy out') || text.includes('re-mortgage') || text.includes('remortgage')) result.transaction_type = 'buyout';
   else if (text.includes('equity release') || text.includes('equity')) result.transaction_type = 'equity';
+  else if (/\b(handover|completion|developer\s+handover|final\s+payment\s+(?:due\s+)?(?:at|on)\s+handover)\b/i.test(notes)) result.transaction_type = 'handover';
+  else if (text.includes('resale') || text.includes('secondary market') || text.includes('ready purchase') || text.includes('ready property') || /\bpurchase\b/.test(text)) result.transaction_type = 'resale';
 
   // Property type
   if (text.includes('apartment') || text.includes('flat') || text.includes('studio')) result.property_type = 'Apartment';
