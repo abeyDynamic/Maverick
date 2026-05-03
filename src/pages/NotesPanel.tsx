@@ -930,22 +930,7 @@ export default function NotesPanel({
               </div>
             )}
 
-            {/* ── POLICY FIT TAB ── */}
-            {tab === 'policyfit' && (
-              <PolicyFitChatPanel
-                caseFacts={policyFitCaseFacts ?? {
-                  segment: '',
-                  employmentType: '',
-                  totalIncome: whatIfContext.totalIncome,
-                  totalLiabilities: whatIfContext.totalLiabilities,
-                  requestedLoanAmount: whatIfContext.loanAmount,
-                  stressRate: whatIfContext.stressRate,
-                  tenorMonths: whatIfContext.tenorMonths,
-                  currentDbr: whatIfContext.currentDbr,
-                }}
-                availableBanks={policyFitBanks ?? [...whatIfContext.eligibleBanks, ...whatIfContext.ineligibleBanks]}
-              />
-            )}
+            {/* Policy Fit tab removed — its capabilities are now part of the What-If chat. */}
 
             {/* ── HISTORY TAB ── */}
             {tab === 'history' && (
