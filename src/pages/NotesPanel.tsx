@@ -15,8 +15,8 @@ import { COUNTRIES, EMIRATES, calculateStressEMI, formatCurrency } from '@/lib/m
 import { buildWhatIfAnalysis } from '@/lib/case/stage1-engine';
 import type { CaseBankResult } from '@/lib/case/stage1-engine';
 import type { CaseLiabilityField } from '@/lib/case/types';
-import PolicyFitChatPanel from '@/components/qualify/PolicyFitChatPanel';
 import type { PolicyFitCaseFacts } from '@/lib/policies/policyFitTypes';
+import { parsePolicyFitIntent } from '@/lib/policies/policyFitIntentParser';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
