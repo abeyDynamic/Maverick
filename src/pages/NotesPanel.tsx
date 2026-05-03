@@ -600,7 +600,7 @@ export default function NotesPanel({
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [minimised, setMinimised] = useState(false);
-  const [tab, setTab] = useState<'notes' | 'whatif' | 'policyfit' | 'history'>('notes');
+  const [tab, setTab] = useState<'notes' | 'whatif' | 'history'>('notes');
   const [draft, setDraft] = useState('');
   const [sessionLabel, setSessionLabel] = useState('');
   const [savedNotes, setSavedNotes] = useState<ClientNote[]>([]);
