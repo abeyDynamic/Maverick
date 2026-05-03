@@ -799,6 +799,7 @@ export default function QualifyNew({ editApplicantId }: QualifyNewProps = {}) {
         incomeRoute: (se?.income_route ?? prev.incomeRoute) as any,
         docType: (se?.doc_type ?? prev.docType) as any,
       }));
+    }
     // Tenor — explicit from notes overrides auto-derived from DOB
     if (result.tenor_months != null && result.tenor_months > 0) {
       setTenorMonths(result.tenor_months);
