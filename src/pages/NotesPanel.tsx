@@ -1130,7 +1130,9 @@ export default function NotesPanel({
         body: { mode: 'qualification_adviser_chat', payload: { message: question, caseContext } },
       });
       if (error) throw error;
-      setChatMessages(prev => [...prev, { role: 'assistant', text: data?.answer ?? 'No response.' }]);
+      const rawAnswer: string = data?.answer ?? 'No response.';
+      const safeAnswer = guardAiAnswer(rawAnswer, policyContext.rows.length > 0, whatIfContext.bankResults.length > 0);
+      setChatMessages(prev => [...prev, { role: 'assistant', text: safeAnswer }]);
     } catch (e: any) {
       console.error('What-if error:', e);
       // Fallback to legacy mode so the chat still works if the edge function
