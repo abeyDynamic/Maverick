@@ -946,6 +946,30 @@ async function retrievePolicyContext(
   }
 }
 
+// Frontend safety net — replace forbidden, unsupported claims with a warning.
+const FORBIDDEN_AI_PATTERNS: RegExp[] = [
+  /\bcentral bank\b/i,
+  /\buae central bank\b/i,
+  /\buae regulation/i,
+  /\bby uae regulation\b/i,
+  /\ball major banks\b/i,
+  /\bguaranteed\b/i,
+  /\bqualifies across all banks\b/i,
+  /\bpublic guidelines\b/i,
+];
+function guardAiAnswer(text: string, hasPolicyContext: boolean, hasBankResults: boolean): string {
+  const t = text || '';
+  for (const re of FORBIDDEN_AI_PATTERNS) {
+    if (re.test(t)) {
+      return '⚠️ This answer attempted to use information outside Maverick\'s data boundary (e.g. Central Bank or generic UAE rules). Please rerun with policy context loaded, or rephrase the question to focus on the case data and bank results.';
+    }
+  }
+  if (!hasBankResults && /\b(approved|all banks eligible)\b/i.test(t)) {
+    return '⚠️ This answer claimed approval/eligibility without deterministic Maverick bank results. Please rerun once the qualification engine has produced bank results.';
+  }
+  return t;
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 export default function NotesPanel({
