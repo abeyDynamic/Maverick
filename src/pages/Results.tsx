@@ -328,12 +328,75 @@ export default function Results() {
           </div>
 
           <div className="hidden lg:block w-[35%] sticky top-8" style={{ height: 'calc(100vh - 16rem)' }}>
-            <WhatIfChat initialAnalysis={whatIfAnalysis || '✅ All banks are eligible — no what-if scenarios needed.'} />
+            <WhatIfChat
+              initialAnalysis={whatIfAnalysis || '✅ All banks are eligible — no what-if scenarios needed.'}
+              availableBanks={bankNames}
+              caseFacts={{
+                segment: resolvedSegment,
+                employmentType: applicant.employment_type ?? '',
+                transactionType: property.transaction_type ?? undefined,
+                requestedLoanAmount: loanAmount,
+                propertyValue: property.property_value ?? undefined,
+                requestedLtv: ltv,
+                totalIncome,
+                totalLiabilities,
+                stressRate: property.stress_rate,
+                tenorMonths,
+                nationality: applicant.nationality ?? null,
+              }}
+              caseContext={{
+                qualificationResults: {
+                  bankResults: bankResults.map(r => ({
+                    bank: r.bank.bankName,
+                    eligible: r.eligible,
+                    dbr: r.dbr,
+                    dbrLimit: r.dbrLimit,
+                    stressEMI: r.stressEMI,
+                    minSalaryMet: r.minSalaryMet,
+                    dbrMet: r.dbrMet,
+                    loanInRange: r.loanInRange,
+                    effectiveTenor: r.effectiveTenor,
+                  })),
+                  totalIncome,
+                  totalLiabilities,
+                  loanAmount,
+                  stressRate: property.stress_rate,
+                  tenorMonths,
+                },
+                whatIfAnalysis,
+              }}
+            />
           </div>
         </div>
 
         <div className="lg:hidden" style={{ height: '500px' }}>
-          <WhatIfChat initialAnalysis={whatIfAnalysis || '✅ All banks are eligible — no what-if scenarios needed.'} />
+          <WhatIfChat
+            initialAnalysis={whatIfAnalysis || '✅ All banks are eligible — no what-if scenarios needed.'}
+            availableBanks={bankNames}
+            caseFacts={{
+              segment: resolvedSegment,
+              employmentType: applicant.employment_type ?? '',
+              totalIncome,
+              totalLiabilities,
+              stressRate: property.stress_rate,
+              tenorMonths,
+            }}
+            caseContext={{
+              qualificationResults: {
+                bankResults: bankResults.map(r => ({
+                  bank: r.bank.bankName,
+                  eligible: r.eligible,
+                  dbr: r.dbr,
+                  stressEMI: r.stressEMI,
+                })),
+                totalIncome,
+                totalLiabilities,
+                loanAmount,
+                tenorMonths,
+              },
+              whatIfAnalysis,
+            }}
+          />
         </div>
       </main>
     </div>
